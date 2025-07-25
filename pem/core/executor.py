@@ -46,8 +46,9 @@ class JobExecutor:
 
             # 3. Run the project
             log_file.write("\n--- Executing project ---\n")
-            python_path = self.venv_path / "bin" / "python"
-            exit_code = await self._run_command([str(python_path), "main.py"], log_file)
+            exit_code = await self._run_command(
+                ["uv", "run", "--directory", str(self.project_path), "main.py"], log_file
+            )
 
         status = "SUCCEEDED" if exit_code == 0 else "FAILED"
         print(f"✅ Job '{self.project_name}' finished with status: {status}")
