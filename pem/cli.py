@@ -1,18 +1,18 @@
-import typer
 import asyncio
-from typing_extensions import Annotated
+from typing import Annotated
+
+import typer
+
+from pem.core.executor import JobExecutor
 from pem.db.database import SessionLocal, create_db_and_tables
 from pem.db.models import Project
-from pem.core.executor import JobExecutor
 
 app = typer.Typer(help="Python Execution Manager (pem)")
 
 
 @app.callback()
-def main():
-    """
-    Manage Python projects. Call a command like 'project add' or 'project run'.
-    """
+def main() -> None:
+    """Manage Python projects. Call a command like 'project add' or 'project run'."""
     create_db_and_tables()
 
 
@@ -25,7 +25,7 @@ app.add_typer(project_app, name="project")
 def add_project(
     name: Annotated[str, typer.Option(prompt=True)],
     path: Annotated[str, typer.Argument(help="Path to the project directory.")],
-):
+) -> None:
     """Adds a new project to be managed by pem."""
     db = SessionLocal()
     try:
@@ -38,7 +38,7 @@ def add_project(
 
 
 @project_app.command("run")
-def run_project(name: Annotated[str, typer.Argument(help="Name of the project to run.")]):
+def run_project(name: Annotated[str, typer.Argument(help="Name of the project to run.")]) -> None:
     """Manually runs a project now."""
     db = SessionLocal()
     try:

@@ -1,13 +1,13 @@
 import asyncio
 import subprocess
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
 
 
 class JobExecutor:
     """Handles the execution of a single project run."""
 
-    def __init__(self, project_path: str, project_name: str = "default_project"):
+    def __init__(self, project_path: str, project_name: str = "default_project") -> None:
         self.project_path = Path(project_path).resolve()
         self.project_name = project_name
         self.venv_path = self.project_path / ".pem_venv"
@@ -31,8 +31,6 @@ class JobExecutor:
         log_filename = f"{self.project_name}_{start_time.strftime('%Y%m%d_%H%M%S')}.log"
         log_path = self.logs_dir / log_filename
 
-        print(f"🚀 Starting job '{self.project_name}'. Log file: {log_path}")
-
         with open(log_path, "w") as log_file:
             log_file.write(f"--- Starting execution at {start_time.isoformat()} ---\n")
 
@@ -47,9 +45,9 @@ class JobExecutor:
             # 3. Run the project
             log_file.write("\n--- Executing project ---\n")
             exit_code = await self._run_command(
-                ["uv", "run", "--directory", str(self.project_path), "main.py"], log_file
+                ["uv", "run", "--directory", str(self.project_path), "main.py"],
+                log_file,
             )
 
         status = "SUCCEEDED" if exit_code == 0 else "FAILED"
-        print(f"✅ Job '{self.project_name}' finished with status: {status}")
         return {"status": status, "exit_code": exit_code, "log_path": str(log_path)}
