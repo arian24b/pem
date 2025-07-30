@@ -1,29 +1,20 @@
 [project]
 name = "pem"
 version = "0.1.0"
-description = "Add your description here"
+description = "🚀 Python Execution Manager - A powerful, modern tool for managing, scheduling, and executing Python scripts and projects with comprehensive logging, flexible scheduling, and dependency management. Perfect for DevOps, data science, and automation workflows."
 readme = "README.md"
-keywords = ["tool", "python"]
+keywords = ["python", "scheduler", "automation", "devops", "task-runner", "cron", "execution", "management", "scripts", "projects", "cli", "background-jobs", "logging", "dependencies"]
 authors = [{name = "Arian Omrani"}]
 requires-python = ">=3.13"
 dependencies = [
     "apscheduler>=3.11.0",
-    "fastapi>=0.116.1",
-    "pydantic>=2.11.7",
-    "pydantic-settings>=2.10.1",
-    "rich>=14.0.0",
     "sqlalchemy>=2.0.41",
     "typer>=0.16.0",
     "uv>=0.8.2",
 ]
 
 [dependency-groups]
-dev = [
-    "alembic>=1.16.4",
-    "pytest>=8.4.1",
-    "ruff>=0.12.4",
-    "sqlite-web>=0.6.4",
-]
+dev = []
 
 [project.scripts]
 pem = "pem.cli:app"
