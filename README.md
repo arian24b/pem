@@ -1,6 +1,6 @@
 # PEM - Python Execution Manager 🚀
 
-**A powerful, modern Python tool for managing, scheduling, and executing Python scripts and projects with ease.**
+**A powerful, modern CLI tool for managing, scheduling, and executing Python scripts and projects with ease.**
 
 [![Python 3.13+](https://img.shields.io/badge/python-3.13+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
@@ -8,251 +8,378 @@
 
 ## ✨ What is PEM?
 
-PEM is your all-in-one solution for Python execution management. Whether you're running one-off scripts, managing complex projects, or scheduling automated tasks, PEM makes it simple and reliable.
+PEM (Python Execution Manager) is your comprehensive solution for managing Python script and project execution. Whether you need to run scripts on-demand, schedule automated tasks, or manage complex Python workflows, PEM provides an intuitive CLI interface with powerful scheduling capabilities.
 
 ### 🎯 Perfect for:
-- **DevOps Engineers** managing deployment scripts and automation
-- **Data Scientists** running scheduled data processing jobs
-- **Python Developers** organizing and executing multiple projects
-- **System Administrators** automating maintenance tasks
-- **Anyone** who needs reliable Python script execution with logging
+- **Data Scientists** scheduling ETL pipelines and analysis scripts
+- **DevOps Engineers** automating deployment and maintenance tasks
+- **Python Developers** managing multiple projects and scripts
+- **System Administrators** running scheduled monitoring and backup tasks
+- **Anyone** who needs reliable Python execution with proper logging and scheduling
 
 ## 🌟 Key Features
 
-### 📋 **Job Management**
-- **Two Job Types**: Handle both standalone scripts and full Python projects
-- **Dependency Management**: Automatically install and manage script dependencies using `uv`
-- **Smart Execution**: Uses `uv run` for fast, isolated script execution
-- **Project Support**: Full support for Python projects with virtual environments
+### 📋 **Unified Job Management**
+- **Two Job Types**: Handle both standalone Python scripts and full projects
+- **Smart Auto-execution**: Automatically run jobs after creation (configurable)
+- **Dependency Management**: Specify Python dependencies for script-type jobs
+- **Enable/Disable Control**: Easy job activation and deactivation
 
-### ⏰ **Flexible Scheduling**
+### ⏰ **Flexible Scheduling System**
 - **Multiple Schedule Types**:
-  - `once` - Run at a specific date/time
+  - `once` - Execute at a specific date/time
   - `interval` - Run every X seconds/minutes/hours/days
-  - `cron` - Use cron expressions for complex schedules
-  - `until_done` - Keep retrying until the job succeeds
-- **Background Execution**: All scheduled jobs run in the background
-- **Persistent Storage**: Schedules survive system restarts
+  - `cron` - Use cron-style expressions for complex schedules
+  - `until_done` - Retry until successful execution
+- **Unified Execution**: Single `run` command for immediate + optional scheduling
+- **Background Processing**: All scheduled jobs run automatically in the background
 
-### 📊 **Comprehensive Logging & Tracking**
-- **Detailed Logs**: Every execution is logged with timestamps and output
-- **Execution History**: Track all job runs with status, exit codes, and timing
-- **SQLite Database**: Local storage for jobs, schedules, and execution history
-- **Real-time Status**: See what's running, what succeeded, and what failed
+### 📊 **Comprehensive Monitoring & Logging**
+- **Detailed Execution Logs**: Every run logged with timestamps, status, and output
+- **Real-time Status**: View system overview with job counts and schedules
+- **SQLite Database**: Persistent local storage for all jobs and execution history
+- **Rich CLI Output**: Color-coded feedback with emojis for better UX
 
-### 🛠 **Developer-Friendly CLI**
+### 🛠 **Developer-Friendly Interface**
 - **Intuitive Commands**: Simple, memorable command structure
-- **Rich Output**: Colored terminal output with emojis for better UX
-- **Flexible Options**: Extensive command-line options for all use cases
-- **Built with Typer**: Modern, type-safe CLI framework
+- **Type-safe CLI**: Built with modern Typer framework
+- **Clean Help Output**: No clutter - only essential information shown
+- **Actionable Error Messages**: Clear guidance when things go wrong
 
 ## 🚀 Quick Start
 
 ### Installation
+```bash
+# If using in your project
+uv add pemexe
+# OR
+pip install pemexe
+
+# If using as tool
+uvx --from pemexe pem
+```
+
 
 ```bash
-# Install PEM
-pip install pem
+# Clone and install locally
+git clone https://github.com/arian24b/pem.git
+cd pem
+uv sync
 
-# Or using uv (recommended)
-uv add pem
+# Or install from source
+pip install -e .
 ```
 
 ### Basic Usage
 
 ```bash
-# Run a Python script with dependencies
-pem run my-data-script --script --path ./data_processor.py --with pandas --with requests
+# Add and run a Python script immediately
+pem add --path ./my_script.py --script --name "data-processor"
 
-# Add a project job
-pem run my-web-app --project --path ./my-flask-app --add-only
+# Add a project without auto-execution
+pem add --path ./my_project --name "web-app" --no-auto-run
 
-# Schedule a job to run every hour
-pem schedule my-data-script --type interval --hours 1
+# Execute an existing job
+pem run --name "data-processor"
 
-# List all jobs
-pem list
+# Execute and schedule for hourly runs
+pem run --name "data-processor" --schedule --type interval --minutes 60
 
-# View job execution history
-pem history my-data-script
+# View all jobs
+pem show
 
-# Check scheduler status
+# Check system status
 pem status
 ```
 
-## 📖 Detailed Usage
+## 📖 Command Reference
 
-### Managing Jobs
+### Job Management Commands
 
-#### Script Jobs
-Perfect for standalone Python scripts with specific dependencies:
+#### `pem add` - Create New Jobs
+Create a new job to execute Python scripts or projects.
 
 ```bash
-# Add and run a script with dependencies
-pem run data-processor \
-  --script \
-  --path ./scripts/process_data.py \
-  --with pandas \
-  --with requests \
-  --with beautifulsoup4
+# Add a simple script with dependencies
+pem add --path ./script.py --script --name "analyzer" --with pandas requests
 
-# Just add the job without running
-pem run backup-script --script --path ./backup.py --add-only
+# Add a project (uses existing environment)
+pem add --path ./my_project --name "web-server"
 
-# Run an existing job
-pem run backup-script --run-only
+# Add disabled job (no auto-execution)
+pem add --path ./script.py --script --disabled --no-auto-run
+
+# Add with specific Python version
+pem add --path ./script.py --script --python 3.11 --with numpy
 ```
 
-#### Project Jobs
-For full Python projects with their own environments:
+**Key Options:**
+- `--path`, `-p`: Path to Python script or project directory *(required)*
+- `--name`, `-n`: Unique job name (auto-generated if not provided)
+- `--script`, `-s`: Treat as single Python script (vs. project)
+- `--with`, `-w`: Python dependencies to install (scripts only)
+- `--python`, `-v`: Required Python version (scripts only)
+- `--enabled/--disabled`, `-e`: Enable/disable job execution
+- `--auto-run/--no-auto-run`: Execute immediately after creation
+
+#### `pem show` - Display Job Information
+Display details of jobs (all jobs if no filter specified).
 
 ```bash
-# Add a Python project
-pem run my-api --project --path ./my-fastapi-project --add-only
+# Show all jobs
+pem show
 
-# Run the project (will use project's own dependencies)
-pem run my-api --run-only
+# Show specific job by name
+pem show --name "data-processor"
+
+# Show specific job by ID
+pem show --id 1
 ```
 
-### Scheduling Jobs
+#### `pem update` - Modify Existing Jobs
+Update properties of an existing job.
 
-#### One-time Execution
 ```bash
-# Run once at a specific time
-pem schedule backup-job --type once --date "2025-12-31 23:59:59"
+# Enable a disabled job
+pem update --name "data-processor" --enabled
+
+# Update job path
+pem update --id 1 --path ./new_script.py
+
+# Change job type and dependencies
+pem update --name "analyzer" --script --with pandas numpy matplotlib
 ```
 
-#### Interval-based Scheduling
+#### `pem delete` - Remove Jobs
+Remove a job permanently from the system.
+
 ```bash
-# Every 30 minutes
-pem schedule data-sync --type interval --minutes 30
+# Delete by name
+pem delete --name "old-job"
 
-# Every 2 hours
-pem schedule hourly-report --type interval --hours 2
-
-# Every day
-pem schedule daily-backup --type interval --days 1
+# Delete by ID
+pem delete --id 1
 ```
 
-#### Cron-style Scheduling
-```bash
-# Every weekday at 9 AM
-pem schedule morning-report --type cron --cron-hour 9 --cron-dow 1-5
+### Execution Commands
 
-# Every Monday at midnight
-pem schedule weekly-cleanup --type cron --cron-hour 0 --cron-dow 1
+#### `pem run` - Execute Jobs (Immediate + Optional Scheduling)
+Execute a job immediately, with optional recurring schedule setup.
+
+```bash
+# Execute job immediately
+pem run --name "data-processor"
+
+# Execute and set up hourly schedule
+pem run --name "monitor" --schedule --type interval --minutes 60
+
+# Execute by ID with daily schedule
+pem run --id 1 --schedule --type interval --minutes 1440
 ```
 
-#### Retry Until Success
+**Key Options:**
+- `--id`, `-i`: ID of job to execute
+- `--name`, `-n`: Name of job to execute
+- `--schedule/--no-schedule`, `-s`: Set up recurring schedule
+- `--type`, `-t`: Schedule type (interval, once, cron, until_done)
+- `--minutes`, `-m`: Interval in minutes (for interval scheduling)
+
+### Scheduling Commands
+
+#### `pem cron` - Advanced Job Scheduling
+Schedule a job for automatic execution using various timing options.
+
 ```bash
-# Keep trying every 5 minutes until it succeeds (max 20 attempts)
-pem schedule critical-task --type until_done --retry-interval 300 --max-retries 20
+# Schedule every 30 minutes
+pem cron --name "monitor" --type interval --minutes 30
+
+# Schedule daily at 9 AM using cron
+pem cron --name "report" --type cron --cron-hour 9 --cron-minute 0
+
+# Schedule one-time execution
+pem cron --name "backup" --type once --date "2024-12-31T23:59:59"
+
+# Retry until success
+pem cron --name "flaky-job" --type until_done --max-retries 5 --retry-interval 300
 ```
 
-### Monitoring & Management
+**Schedule Types:**
+- **interval**: `--seconds`, `--minutes`, `--hours`, `--days`
+- **once**: `--date` (ISO format: 2024-01-01T10:00:00)
+- **cron**: `--cron-minute`, `--cron-hour`, `--cron-day`, `--cron-month`, `--cron-dow`
+- **until_done**: `--max-retries`, `--retry-interval`
+
+#### `pem crons` - List Scheduled Jobs
+List all jobs currently scheduled for automatic execution.
 
 ```bash
-# List all jobs
-pem list
+pem crons
+```
 
-# Show job details
-pem show my-job
+#### `pem cancel` - Cancel Scheduled Jobs
+Cancel a scheduled job by its scheduler ID.
 
-# View execution history
-pem history my-job
+```bash
+# Cancel specific scheduled job (use ID from 'pem crons')
+pem cancel --scheduler-id "pem_job_interval_1_20241201_120000"
+```
 
-# Check what's scheduled and running
+### System Commands
+
+#### `pem status` - System Overview
+Display system overview with job counts and scheduling statistics.
+
+```bash
 pem status
-
-# Enable/disable jobs
-pem enable my-job
-pem disable my-job
-
-# Remove jobs
-pem remove my-job
 ```
 
-## 🏗 Architecture
+Shows:
+- Total jobs (enabled/disabled, scripts/projects)
+- Active scheduled jobs with next run times
+- System health at a glance
 
-PEM is built with modern Python best practices:
+## 🏗 Architecture & Design
 
-- **SQLAlchemy**: Robust database ORM for job and execution tracking
-- **APScheduler**: Reliable job scheduling with multiple backends
-- **Typer**: Type-safe, intuitive CLI framework
-- **uv**: Fast Python package management and script execution
-- **AsyncIO**: Efficient asynchronous execution
+PEM is built with modern Python technologies:
+
+- **AsyncTyper**: Custom async CLI framework extending Typer
+- **SQLAlchemy**: Robust async database ORM for data persistence
+- **APScheduler**: Reliable background job scheduling
+- **Faker**: Automatic job name generation
+- **AsyncIO**: Efficient asynchronous execution throughout
+
+### Database Schema
+- **Jobs Table**: Stores job definitions, paths, dependencies, and settings
+- **Execution History**: Tracks all job runs with status, logs, and timing
+- **Schedule Tracking**: Manages active schedules and their configurations
+
+## 🔧 Configuration & Setup
+
+PEM works out of the box with minimal configuration:
+
+- **Database**: SQLite (`pem.db`) in working directory
+- **Logs**: Stored in `./logs/` with timestamped filenames
+- **Auto-initialization**: Database and tables created automatically
+- **Environment Isolation**: Uses proper Python environment handling
 
 ## 📁 Project Structure
 
 ```
 pem/
 ├── pem/
-│   ├── cli.py          # Command-line interface
-│   ├── main.py         # Application entry point
-│   ├── settings.py     # Configuration
+│   ├── cli.py              # Main CLI interface with all commands
+│   ├── settings.py         # Configuration and settings
 │   ├── core/
-│   │   ├── executor.py # Job execution engine
-│   │   └── scheduler.py # Background scheduling
+│   │   ├── executor.py     # Job execution engine
+│   │   └── scheduler.py    # Background scheduling manager
 │   └── db/
-│       ├── database.py # Database configuration
-│       └── models.py   # SQLAlchemy models
-├── logs/               # Execution logs
-├── pem.db             # SQLite database
-└── pyproject.toml     # Project configuration
+│       ├── database.py     # Database configuration & sessions
+│       └── models.py       # SQLAlchemy data models
+├── logs/                   # Execution logs directory
+├── pem.db                 # SQLite database file
+└── pyproject.toml         # Project configuration with uv
 ```
 
-## 🔧 Configuration
+## � Common Workflows
 
-PEM works out of the box with sensible defaults:
+### 1. Quick Script Development & Testing
+```bash
+# Add and test a script immediately
+pem add --path ./analysis.py --script --name "analysis" --with pandas
 
-- **Database**: SQLite (`pem.db`) in the current directory
-- **Logs**: Stored in `./logs/` directory
-- **Virtual Environments**: Created in project directories as `.pem_venv`
+# Iterate and re-run during development
+pem run --name "analysis"
+```
+
+### 2. Production Data Pipeline Setup
+```bash
+# Add ETL script
+pem add --path ./etl_pipeline.py --script --name "daily-etl" --no-auto-run
+
+# Schedule for daily execution at 2 AM
+pem cron --name "daily-etl" --type cron --cron-hour 2 --cron-minute 0
+
+# Monitor scheduled jobs
+pem crons
+pem status
+```
+
+### 3. System Monitoring Setup
+```bash
+# Add monitoring script
+pem add --path ./health_check.py --script --name "health-monitor" --no-auto-run
+
+# Set up 5-minute monitoring
+pem cron --name "health-monitor" --type interval --minutes 5
+
+# Check system status
+pem status
+```
+
+### 4. Project Management
+```bash
+# Add a Python project
+pem add --path ./my_fastapi_app --name "api-server" --no-auto-run
+
+# Run when needed
+pem run --name "api-server"
+
+# Update project path as it evolves
+pem update --name "api-server" --path ./updated_fastapi_app
+```
+
+## 🆚 Why Choose PEM?
+
+### vs. Cron/Task Scheduler
+- ✅ **Cross-platform**: Works identically on Windows, macOS, and Linux
+- ✅ **Python-native**: No shell scripting required
+- ✅ **Dependency management**: Built-in package handling
+- ✅ **Rich logging**: Detailed execution history and status tracking
+- ✅ **User-friendly**: Modern CLI with helpful error messages
+
+### vs. Other Python Task Runners
+- ✅ **Zero configuration**: Works immediately without complex setup files
+- ✅ **Local storage**: No external databases or services required
+- ✅ **Unified interface**: Single tool for all execution needs
+- ✅ **Flexible scheduling**: Multiple timing patterns in one tool
+- ✅ **Developer UX**: Intuitive commands with excellent error handling
+
+### vs. Manual Script Management
+- ✅ **Automated scheduling**: Set-and-forget execution
+- ✅ **Centralized management**: All scripts in one place
+- ✅ **Execution tracking**: History, logs, and status monitoring
+- ✅ **Error handling**: Retry mechanisms and failure notifications
+- ✅ **Environment isolation**: Proper dependency and version management
 
 ## 🤝 Contributing
 
-We welcome contributions! Here's how to get started:
+We welcome contributions! To get started:
 
-1. Fork the repository
-2. Create a feature branch: `git checkout -b my-new-feature`
-3. Make your changes and add tests
-4. Run the test suite: `pytest`
-5. Submit a pull request
+1. **Fork the repository**
+2. **Create a feature branch**: `git checkout -b feature/amazing-feature`
+3. **Make your changes** with tests
+4. **Run the test suite**: `pytest`
+5. **Submit a pull request**
+
+### Development Setup
+```bash
+git clone https://github.com/arian24b/pem.git
+cd pem
+uv sync
+```
 
 ## 📝 License
 
 MIT License - see [LICENSE](LICENSE) file for details.
 
-## 🙋‍♀️ Support
+## 🙋‍♀️ Support & Community
 
 - **Issues**: [GitHub Issues](https://github.com/arian24b/pem/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/arian24b/pem/discussions)
-
-## 🚀 Why Choose PEM?
-
-### vs. Cron
-- ✅ Cross-platform (works on Windows, macOS, Linux)
-- ✅ Dependency management built-in
-- ✅ Detailed logging and execution history
-- ✅ Easy job management with CLI
-- ✅ Python-native (no shell scripting needed)
-
-### vs. Other Task Runners
-- ✅ Specifically designed for Python
-- ✅ No complex configuration files
-- ✅ Built-in dependency isolation
-- ✅ Simple CLI interface
-- ✅ Local database storage (no external dependencies)
-
-### vs. Manual Script Running
-- ✅ Automated scheduling
-- ✅ Execution history and monitoring
-- ✅ Dependency management
-- ✅ Error handling and retries
-- ✅ Centralized job management
+- **Feature Requests**: [GitHub Discussions](https://github.com/arian24b/pem/discussions)
+- **Documentation**: See the comprehensive [Tool Overview](PEM_TOOL_OVERVIEW.md)
 
 ---
 
 **Made with ❤️ by [Arian Omrani](https://github.com/arian24b)**
 
-*PEM - Making Python execution management simple, reliable, and powerful.*
+*PEM - Schedule and execute Python scripts and projects with ease* 🐍✨
