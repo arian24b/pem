@@ -9,6 +9,8 @@ requires-python = ">=3.13"
 dependencies = [
     "aiosqlite>=0.21.0",
     "apscheduler>=3.11.0",
+    "faker>=37.5.3",
+    "greenlet>=3.2.3",
     "sqlalchemy>=2.0.41",
     "typer>=0.16.0",
     "uv>=0.8.10",
