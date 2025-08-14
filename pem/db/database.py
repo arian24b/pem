@@ -1,3 +1,5 @@
+"""Database functionality for the Python Execution Manager (PEM)."""
+
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.orm import declarative_base
 
