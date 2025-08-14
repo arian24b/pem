@@ -17,28 +17,27 @@ from pem.settings import DATABASE_URL
 ScheduleType = Literal["once", "interval", "cron", "until_done"]
 
 
-def execute_job_standalone(job_id: int) -> dict[str, Any]:
-    """Standalone function to execute a job (for scheduler serialization)."""
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    try:
-        return loop.run_until_complete(_execute_job_async(job_id))
-    finally:
-        loop.close()
-
-
 async def _execute_job_async(job_id: int) -> dict[str, Any]:
     """Execute a job asynchronously."""
     db = SessionLocal()
     try:
-        job = db.query(Job).filter(Job.id == job_id).first()
-        if not job:
+        if not (job := db.query(Job).get(job_id)):
             return {"status": "FAILED", "error": "Job not found"}
 
-        executor = Executor(job)
-        return await executor.execute()
+        return await Executor(job).execute()
     finally:
         db.close()
+
+
+def execute_job_standalone(job_id: int) -> dict[str, Any]:
+    """Standalone function to execute a job (for scheduler serialization)."""
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+
+    try:
+        return loop.run_until_complete(_execute_job_async(job_id))
+    finally:
+        loop.close()
 
 
 def execute_until_done_standalone(job_id: int, max_retries: int = 10, retry_interval: int = 60) -> None:
@@ -80,12 +79,10 @@ class SchedulerManager:
         """Execute a job asynchronously."""
         db = SessionLocal()
         try:
-            job = db.query(Job).filter(Job.id == job_id).first()
-            if not job:
+            if not (job := db.query(Job).get(job_id)):
                 return {"status": "FAILED", "error": "Job not found"}
 
-            executor = Executor(job)
-            return await executor.execute()
+            return await Executor(job).execute()
         finally:
             db.close()
 
@@ -128,77 +125,73 @@ class SchedulerManager:
             scheduler_job_id: The APScheduler job ID
 
         """
-        scheduler_job_id = f"pem_job_{job_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        scheduler_job_id = f"pem_job_{schedule_type}_{job_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
 
-        if schedule_type == "once":
-            # Schedule to run once at a specific time
-            run_date = kwargs.get("run_date")
-            if isinstance(run_date, str):
-                run_date = datetime.fromisoformat(run_date)
+        match schedule_type:
+            case "once":
+                # Schedule to run once at a specific time
+                run_date = kwargs.get("run_date")
+                if isinstance(run_date, str):
+                    run_date = datetime.fromisoformat(run_date)
 
-            self.scheduler.add_job(
-                func=execute_job_standalone,
-                trigger="date",
-                run_date=run_date,
-                args=[job_id],
-                id=scheduler_job_id,
-                replace_existing=True,
-            )
+                self.scheduler.add_job(
+                    func=execute_job_standalone,
+                    trigger="date",
+                    run_date=run_date,
+                    args=[job_id],
+                    id=scheduler_job_id,
+                    replace_existing=True,
+                )
 
-        elif schedule_type == "interval":
-            # Schedule to run at regular intervals
-            seconds = kwargs.get("seconds", 0)
-            minutes = kwargs.get("minutes", 0)
-            hours = kwargs.get("hours", 0)
-            days = kwargs.get("days", 0)
+            case "interval":
+                # Schedule to run at regular intervals
+                self.scheduler.add_job(
+                    func=execute_job_standalone,
+                    trigger="interval",
+                    seconds=kwargs.get("seconds", 0),
+                    minutes=kwargs.get("minutes", 0),
+                    hours=kwargs.get("hours", 0),
+                    days=kwargs.get("days", 0),
+                    args=[job_id],
+                    id=scheduler_job_id,
+                    replace_existing=True,
+                )
 
-            self.scheduler.add_job(
-                func=execute_job_standalone,
-                trigger="interval",
-                seconds=seconds,
-                minutes=minutes,
-                hours=hours,
-                days=days,
-                args=[job_id],
-                id=scheduler_job_id,
-                replace_existing=True,
-            )
+            case "cron":
+                # Schedule using cron expression
+                cron_kwargs = {
+                    k: v for k, v in kwargs.items() if k in ["second", "minute", "hour", "day", "month", "day_of_week"]
+                }
 
-        elif schedule_type == "cron":
-            # Schedule using cron expression
-            cron_kwargs = {
-                k: v for k, v in kwargs.items() if k in ["second", "minute", "hour", "day", "month", "day_of_week"]
-            }
+                self.scheduler.add_job(
+                    func=execute_job_standalone,
+                    trigger="cron",
+                    args=[job_id],
+                    id=scheduler_job_id,
+                    replace_existing=True,
+                    **cron_kwargs,
+                )
 
-            self.scheduler.add_job(
-                func=execute_job_standalone,
-                trigger="cron",
-                args=[job_id],
-                id=scheduler_job_id,
-                replace_existing=True,
-                **cron_kwargs,
-            )
+            case "until_done":
+                # Run in background thread until success
+                max_retries = kwargs.get("max_retries", 10)
+                retry_interval = kwargs.get("retry_interval", 60)
 
-        elif schedule_type == "until_done":
-            # Run in background thread until success
-            max_retries = kwargs.get("max_retries", 10)
-            retry_interval = kwargs.get("retry_interval", 60)
+                # Track this job
+                self.running_jobs[job_id] = {
+                    "scheduler_job_id": scheduler_job_id,
+                    "start_time": datetime.now(),
+                    "max_retries": max_retries,
+                    "retry_interval": retry_interval,
+                }
 
-            # Track this job
-            self.running_jobs[job_id] = {
-                "scheduler_job_id": scheduler_job_id,
-                "start_time": datetime.now(),
-                "max_retries": max_retries,
-                "retry_interval": retry_interval,
-            }
-
-            # Run in a separate thread
-            thread = threading.Thread(
-                target=execute_until_done_standalone,
-                args=[job_id, max_retries, retry_interval],
-                daemon=True,
-            )
-            thread.start()
+                # Run in a separate thread
+                thread = threading.Thread(
+                    target=execute_until_done_standalone,
+                    args=[job_id, max_retries, retry_interval],
+                    daemon=True,
+                )
+                thread.start()
 
         return scheduler_job_id
 
