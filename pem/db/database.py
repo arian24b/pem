@@ -1,14 +1,20 @@
-from sqlalchemy import create_engine
-from sqlalchemy.orm import declarative_base, sessionmaker
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy.orm import declarative_base
 
 from pem.settings import DATABASE_URL
 
 Base = declarative_base()
 
-engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+engine = create_async_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+SessionLocal = async_sessionmaker(
+    autocommit=False,
+    autoflush=False,
+    bind=engine,
+    expire_on_commit=False,
+)
 
 
-def create_db_and_tables() -> None:
+async def create_db_and_tables() -> None:
     """Creates the database and tables if they don't exist."""
-    Base.metadata.create_all(bind=engine)
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
