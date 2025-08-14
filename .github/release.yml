@@ -62,9 +62,9 @@ jobs:
         os: [ubuntu-latest, macos-latest]
         include:
           - os: ubuntu-latest
-            asset_name: linkcovery-linux
+            asset_name: pem-linux
           - os: macos-latest
-            asset_name: linkcovery-macos
+            asset_name: pem-macos
 
     steps:
       - uses: actions/checkout@v4
@@ -83,7 +83,7 @@ jobs:
         run: uv run scripts/build_binary.py
 
       - name: Rename binary
-        run: mv dist/linkcovery dist/${{ matrix.asset_name }}
+        run: mv dist/pem dist/${{ matrix.asset_name }}
 
       - name: Upload binary to release
         uses: svenstaro/upload-release-action@v2
