@@ -52,13 +52,13 @@ app = AsyncTyper(
 )
 
 
-@app.callback(invoke_without_command=True)
-async def main(ctx: typer.Context) -> None:
-    await create_db_and_tables()
-    # If no command is provided, show help
-    if ctx.invoked_subcommand is None:
-        typer.echo(ctx.get_help())
-        ctx.exit()
+# @app.callback(invoke_without_command=True)
+# async def main(ctx: typer.Context) -> None:
+#     await create_db_and_tables()
+#     # If no command is provided, show help
+#     if ctx.invoked_subcommand is None:
+#         typer.echo(ctx.get_help())
+#         ctx.exit()
 
 
 @app.command(name="add", help="Create a new job to execute Python scripts or projects.", no_args_is_help=True)
@@ -523,5 +523,9 @@ async def show_status() -> None:
         typer.echo("💡 No jobs are currently scheduled. Use 'pem cron' to schedule jobs.")
 
 
-if __name__ == "__main__":
+def main() -> None:
     asyncio.run(app())
+
+
+if __name__ == "__main__":
+    main()
