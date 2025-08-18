@@ -1,3 +1,10 @@
+# [1.2.0](https://github.com/arian24b/pem/compare/v1.1.0...v1.2.0) (2025-08-18)
+
+
+### Features
+
+* Add main entry point to initialize the CLI ([085f60a](https://github.com/arian24b/pem/commit/085f60a39ab0ef830c7d96858600ff974b849806))
+
 # [1.1.0](https://github.com/arian24b/pem/compare/v1.0.0...v1.1.0) (2025-08-18)
 
 
