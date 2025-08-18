@@ -1,3 +1,10 @@
+# [1.1.0](https://github.com/arian24b/pem/compare/v1.0.0...v1.1.0) (2025-08-18)
+
+
+### Features
+
+* Bump version to 0.2.0 in pyproject.toml ([05f8f4f](https://github.com/arian24b/pem/commit/05f8f4f38143df542c2ae0a87bf8dee03cbb8b08))
+
 # 1.0.0 (2025-08-14)
 
 
