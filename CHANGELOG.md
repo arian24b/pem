@@ -1,3 +1,11 @@
+# [1.3.0](https://github.com/arian24b/pem/compare/v1.2.0...v1.3.0) (2025-08-21)
+
+
+### Features
+
+* Add Makefile and update README for development commands; implement main entry point and release scripts ([1fd3508](https://github.com/arian24b/pem/commit/1fd3508f8ac75a62bc50eedd5fed07aef8d29e18))
+* Enhance performance and logging across the application; optimize database, executor, and scheduler functionalities ([d63b9b6](https://github.com/arian24b/pem/commit/d63b9b6be6755d11c81cd49a9da4eecf83686b6b))
+
 # [1.2.0](https://github.com/arian24b/pem/compare/v1.1.0...v1.2.0) (2025-08-18)
 
 
