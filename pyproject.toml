@@ -3,9 +3,26 @@ name = "pemexe"
 version = "1.2.0"
 description = "🚀 Python Execution Manager - A powerful, modern tool for managing, scheduling, and executing Python scripts and projects with comprehensive logging, flexible scheduling, and dependency management. Perfect for DevOps, data science, and automation workflows."
 readme = "README.md"
+license = {file = "LICENSE"}
 keywords = ["python", "scheduler", "automation", "devops", "task-runner", "cron", "execution", "management", "scripts", "projects", "cli", "background-jobs", "logging", "dependencies"]
-authors = [{name = "Arian Omrani"}]
+authors = [{name = "Arian Omrani", email = "arian24b@gmail.com"}]
+maintainers = [{name = "Arian Omrani", email = "arian24b@gmail.com"}]
 requires-python = ">=3.13"
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: System Administrators",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: System :: Systems Administration",
+    "Topic :: Utilities",
+    "Environment :: Console",
+    "Typing :: Typed",
+]
 dependencies = [
     "aiosqlite>=0.21.0",
     "apscheduler>=3.11.0",
@@ -13,36 +30,150 @@ dependencies = [
     "greenlet>=3.2.3",
     "sqlalchemy>=2.0.41",
     "typer>=0.16.0",
-    "uv>=0.8.10",
 ]
 
 [dependency-groups]
 dev = [
     "pre-commit>=4.2.0",
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.24.0",
+    "pytest-cov>=6.0.0",
+    "mypy>=1.8.0",
+    "ruff>=0.8.0",
 ]
 build = [
     "pyinstaller>=6.14.2",
+    "build>=1.0.0",
+]
+release = [
+    "twine>=6.0.0",
 ]
 
 [project.scripts]
-pem = "pemexe.pem.cli:main"
+pem = "pem.cli:run"
 
 [project.urls]
 Homepage = "https://github.com/arian24b/pem"
+Repository = "https://github.com/arian24b/pem.git"
 Issues = "https://github.com/arian24b/pem/issues"
+Changelog = "https://github.com/arian24b/pem/blob/main/CHANGELOG.md"
+Documentation = "https://github.com/arian24b/pem#readme"
 
-[tool.ruff]
-line-length = 120
-
-[tool.ruff.lint]
-select = ["E", "F", "W", "I"] # Standard checks + isort
-
+# UV Configuration
 [tool.uv]
 package = true
+dev-dependencies = []
 
+# Publishing configuration
+[tool.uv.publish]
+# Default publish settings - can be overridden via CLI
+index = "pypi"
+check-url = true
+
+# Build system configuration
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling>=1.21.0"]
 build-backend = "hatchling.build"
 
+# Hatchling configuration
+[tool.hatch.version]
+path = "pem/__init__.py"
+
 [tool.hatch.build.targets.wheel]
-packages = ["linkcovery"]
+packages = ["pem"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "/pem",
+    "/scripts",
+    "/README.md",
+    "/LICENSE",
+    "/CHANGELOG.md",
+    "/pyproject.toml",
+]
+exclude = [
+    "/.git",
+    "/.github",
+    "/.pytest_cache",
+    "/.mypy_cache",
+    "/.ruff_cache",
+    "/dist",
+    "/build",
+    "**/__pycache__",
+    "**/*.pyc",
+    "**/*.pyo",
+    "/pem.db*",
+    "/logs",
+]
+
+# Code quality tools configuration
+[tool.ruff]
+line-length = 120
+target-version = "py313"
+fix = true
+show-fixes = true
+
+[tool.ruff.lint]
+select = [
+    "E",      # pycodestyle errors
+    "W",      # pycodestyle warnings
+    "F",      # Pyflakes
+    "I",      # isort
+    "N",      # pep8-naming
+    "UP",     # pyupgrade
+    "S",      # bandit
+    "B",      # flake8-bugbear
+    "A",      # flake8-builtins
+    "C4",     # flake8-comprehensions
+    "DTZ",    # flake8-datetimez
+    "T20",    # flake8-print
+    "SIM",    # flake8-simplify
+    "LOG",    # flake8-logging
+    "RUF",    # Ruff-specific rules
+]
+ignore = [
+    "S101",   # Use of assert detected (needed for tests)
+    "T20",    # print statements (CLI tool)
+    "A003",   # Class attribute shadows builtin
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["S101", "S105", "S106"]
+"scripts/**/*.py" = ["T20"]
+
+[tool.mypy]
+python_version = "3.13"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+check_untyped_defs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_unreachable = true
+show_error_codes = true
+
+[[tool.mypy.overrides]]
+module = [
+    "faker.*",
+    "apscheduler.*",
+    "aiosqlite.*",
+]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+addopts = [
+    "--strict-markers",
+    "--strict-config",
+    "--cov=pem",
+    "--cov-report=term-missing",
+    "--cov-report=html",
+    "--cov-report=xml",
+]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+]

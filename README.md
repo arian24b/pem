@@ -48,6 +48,58 @@ PEM (Python Execution Manager) is your comprehensive solution for managing Pytho
 
 ## 🚀 Quick Start
 
+### Installation Options
+
+#### Option 1: Using UV (Recommended)
+```bash
+# Install UV if you haven't already
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Install PEM from PyPI
+uv tool install pemexe
+
+# Or install from source
+git clone https://github.com/yourusername/pem.git
+cd pem
+uv sync
+uv run pem --help
+```
+
+#### Option 2: Using pip
+```bash
+pip install pemexe
+```
+
+#### Option 3: Download Binary
+```bash
+# Download the latest binary from releases
+wget https://github.com/yourusername/pem/releases/latest/download/pem
+chmod +x pem
+sudo mv pem /usr/local/bin/
+```
+
+### Development Setup
+
+```bash
+# Clone the repository
+git clone https://github.com/yourusername/pem.git
+cd pem
+
+# Install development dependencies
+make dev-install
+# or manually:
+uv sync --group dev --group build --group release
+
+# Run tests
+make test
+
+# Build the project
+make build
+
+# Build standalone binary
+make binary
+```
+
 ### Installation
 ```bash
 # If using in your project
@@ -327,6 +379,94 @@ pem run --name "api-server"
 # Update project path as it evolves
 pem update --name "api-server" --path ./updated_fastapi_app
 ```
+
+## 🛠 Development & Contributing
+
+### Development Workflow
+
+This project uses **UV** for modern Python package management and follows best practices for professional Python development.
+
+#### Quick Development Commands
+```bash
+# Install all dependencies (dev, build, release)
+make dev-install
+
+# Run code quality checks
+make lint
+
+# Format code
+make format
+
+# Run tests with coverage
+make test
+
+# Build Python package
+make build
+
+# Build standalone binary
+make binary
+
+# Full release process
+make release
+```
+
+#### Manual UV Commands
+```bash
+# Install project and dependencies
+uv sync
+
+# Install specific dependency groups
+uv sync --group dev          # Development tools
+uv sync --group build        # Build tools
+uv sync --group release      # Release tools
+
+# Run commands in the UV environment
+uv run pem --help           # Run PEM
+uv run pytest              # Run tests
+uv run ruff check pem/      # Lint code
+uv run mypy pem/            # Type check
+
+# Build and publish
+uv build                    # Build wheel and source dist
+uv publish --token $TOKEN   # Publish to PyPI
+```
+
+#### Project Structure
+```
+pem/
+├── pem/                    # Main package
+│   ├── cli.py             # CLI interface
+│   ├── settings.py        # Configuration
+│   ├── core/              # Core scheduling logic
+│   └── db/                # Database models
+├── scripts/               # Build and release scripts
+│   ├── build_binary.py    # PyInstaller automation
+│   └── release.py         # Release automation
+├── pyproject.toml         # Project configuration
+├── uv.toml                # UV configuration
+├── uv.lock                # Dependency lock file
+└── Makefile               # Development shortcuts
+```
+
+#### Release Process
+
+```bash
+# Option 1: Automated release
+python scripts/release.py
+
+# Option 2: Manual steps
+make lint test              # Quality checks
+make build                  # Build package
+make binary                 # Build binary
+uv publish --token $TOKEN   # Publish to PyPI
+```
+
+#### Configuration Files
+
+- **pyproject.toml**: Main project configuration with modern PEP 518/621 standards
+- **uv.toml**: UV-specific settings for dependency resolution and publishing
+- **uv.lock**: Reproducible dependency versions
+- **Makefile**: Development shortcuts and common commands
 
 ## 🆚 Why Choose PEM?
 
