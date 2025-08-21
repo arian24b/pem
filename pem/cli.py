@@ -52,13 +52,10 @@ app = AsyncTyper(
 )
 
 
-@app.callback(invoke_without_command=True)
-async def main(ctx: typer.Context) -> None:
+@app.callback()
+async def main() -> None:
+    """Initialize the database."""
     await create_db_and_tables()
-    # If no command is provided, show help
-    if ctx.invoked_subcommand is None:
-        typer.echo(ctx.get_help())
-        ctx.exit()
 
 
 @app.command(name="add", help="Create a new job to execute Python scripts or projects.", no_args_is_help=True)

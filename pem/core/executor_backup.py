@@ -8,18 +8,12 @@ from pathlib import Path
 from typing import Any
 
 from pem.db.models import Job
-from pem.performance_config import EXECUTOR_PERFORMANCE_CONFIG, get_optimized_config
 
 # Set up logging for performance monitoring
 logger = logging.getLogger(__name__)
 
-# Get optimized configuration
-_optimized_config = get_optimized_config()
-MAX_CONCURRENT_PROCESSES = _optimized_config.get("max_concurrent_processes", 4)
-PROCESS_TIMEOUT = EXECUTOR_PERFORMANCE_CONFIG.get("process_timeout", 1800)
-
 # Process pool for better performance
-SEMAPHORE = asyncio.Semaphore(MAX_CONCURRENT_PROCESSES)
+_process_semaphore = asyncio.Semaphore(4)  # Limit concurrent processes
 
 
 class Executor:
@@ -58,12 +52,12 @@ class Executor:
                 # Set timeout to prevent hanging processes
                 try:
                     await asyncio.wait_for(process.wait(), timeout=1800)  # 30 minute timeout
-                except TimeoutError:
+                except asyncio.TimeoutError:
                     logger.warning(f"Process timeout for job {self.job.name}, terminating...")
                     process.terminate()
                     try:
                         await asyncio.wait_for(process.wait(), timeout=10)
-                    except TimeoutError:
+                    except asyncio.TimeoutError:
                         process.kill()
                         await process.wait()
                     return -1
@@ -83,7 +77,6 @@ class Executor:
                 command.extend(["--with", dep])
 
         command.append(str(self.script_path))
-        log_file.write(f"--- Running command: {' '.join(command)} ---\n\n")
         return await self._run_command(command, log_file)
 
     async def _execute_project(self, log_file) -> int:
@@ -99,7 +92,6 @@ class Executor:
             # Fallback: try to run the project as a module
             command = ["uv", "run", "python", "-m", self.project_path.name]
 
-        log_file.write(f"--- Running command: {' '.join(command)} ---\n\n")
         return await self._run_command(command, log_file, cwd=self.project_path)
 
     async def execute(self) -> dict[str, Any]:
@@ -110,11 +102,11 @@ class Executor:
         try:
             # Use regular file I/O (async file I/O is complex for this use case)
             with open(self.log_path, "w") as log_file:
-                log_file.write("=== PEM Job Execution Log ===\n")
+                log_file.write(f"=== PEM Job Execution Log ===\n")
                 log_file.write(f"Job: {self.job.name} (ID: {self.job.id})\n")
                 log_file.write(f"Type: {self.job.job_type}\n")
                 log_file.write(f"Started: {start_time}\n")
-                log_file.write("=== Output ===\n\n")
+                log_file.write(f"=== Output ===\n\n")
                 log_file.flush()
 
                 if self.job.job_type == "script":
@@ -149,3 +141,35 @@ class Executor:
             "duration": duration,
             "log_path": str(self.log_path),
         }
+        command.extend(["--script", str(self.script_path)])
+
+        log_file.write(f"--- Running command: {' '.join(command)} ---\n\n")
+        return await self._run_command(command, log_file)
+
+    async def _execute_project(self, log_file) -> int:
+        """Execute a project job using a dedicated venv."""
+        await self._run_command(
+            ["uv", "sync", "--directory", str(self.venv_path)],
+            log_file,
+            self.project_path,
+        )
+
+        return await self._run_command(
+            ["uv", "run", "--directory", str(self.venv_path), "main.py"],  # TODO: get python file
+            log_file,
+            self.project_path,
+        )
+
+    async def execute(self) -> dict[str, Any]:
+        """Execute the job based on its type."""
+        with open(self.log_path, "w") as log_file:
+            log_file.write("--- Starting execution ---\n")
+
+            match self.job.job_type:
+                case "script":
+                    exit_code = await self._execute_script(log_file)
+                case "project":
+                    exit_code = await self._execute_project(log_file)
+
+        status = "SUCCEEDED" if exit_code == 0 else "FAILED"
+        return {"status": status, "exit_code": exit_code, "log_path": str(self.log_path)}

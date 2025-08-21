@@ -2,6 +2,7 @@
 
 import asyncio
 import contextlib
+import logging
 import threading
 from datetime import datetime
 from typing import Any, Literal
@@ -16,44 +17,98 @@ from pem.settings import DATABASE_URL
 
 ScheduleType = Literal["once", "interval", "cron", "until_done"]
 
+# Set up logging for better performance monitoring
+logger = logging.getLogger(__name__)
+
+# Job cache for better performance
+_job_cache = {}
+_cache_lock = threading.Lock()
+
+
+def _get_cached_job(job_id: int) -> Job | None:
+    """Get job from cache or database."""
+    with _cache_lock:
+        if job_id in _job_cache:
+            return _job_cache[job_id]
+    
+    # Not in cache, load from database
+    try:
+        # Use sync session for scheduler compatibility
+        import sqlite3
+        from sqlalchemy import create_engine
+        from sqlalchemy.orm import sessionmaker
+        
+        # Create sync engine for scheduler operations
+        sync_engine = create_engine(DATABASE_URL.replace("aiosqlite", "sqlite"))
+        SyncSession = sessionmaker(bind=sync_engine)
+        
+        with SyncSession() as session:
+            job = session.query(Job).get(job_id)
+            if job:
+                with _cache_lock:
+                    _job_cache[job_id] = job
+            return job
+    except Exception as e:
+        logger.error(f"Failed to load job {job_id}: {e}")
+        return None
+
+
+def _invalidate_job_cache(job_id: int) -> None:
+    """Remove job from cache."""
+    with _cache_lock:
+        _job_cache.pop(job_id, None)
+
 
 async def _execute_job_async(job_id: int) -> dict[str, Any]:
-    """Execute a job asynchronously."""
-    db = SessionLocal()
-    try:
-        if not (job := db.query(Job).get(job_id)):
-            return {"status": "FAILED", "error": "Job not found"}
+    """Execute a job asynchronously with optimized database access."""
+    job = _get_cached_job(job_id)
+    if not job:
+        return {"status": "FAILED", "error": "Job not found"}
 
+    try:
         return await Executor(job).execute()
-    finally:
-        db.close()
+    except Exception as e:
+        logger.error(f"Job execution failed for job {job_id}: {e}")
+        return {"status": "FAILED", "error": str(e)}
 
 
 def execute_job_standalone(job_id: int) -> dict[str, Any]:
-    """Standalone function to execute a job (for scheduler serialization)."""
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-
+    """Optimized standalone function to execute a job."""
+    # Reuse existing event loop if available
     try:
-        return loop.run_until_complete(_execute_job_async(job_id))
-    finally:
-        loop.close()
+        loop = asyncio.get_running_loop()
+        # If we're already in an event loop, create a task
+        future = asyncio.run_coroutine_threadsafe(_execute_job_async(job_id), loop)
+        return future.result(timeout=300)  # 5 minute timeout
+    except RuntimeError:
+        # No running loop, create a new one
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            return loop.run_until_complete(_execute_job_async(job_id))
+        finally:
+            loop.close()
 
 
 def execute_until_done_standalone(job_id: int, max_retries: int = 10, retry_interval: int = 60) -> None:
-    """Standalone function to execute a job repeatedly until it succeeds."""
+    """Optimized standalone function to execute a job repeatedly until it succeeds."""
     attempt = 0
     while attempt < max_retries:
         attempt += 1
+        logger.info(f"Attempt {attempt}/{max_retries} for job {job_id}")
 
         result = execute_job_standalone(job_id)
 
-        if result["status"] == "SUCCEEDED":
-            break
+        if result.get("status") == "SUCCESS":
+            logger.info(f"Job {job_id} completed successfully after {attempt} attempts")
+            return
+
         if attempt < max_retries:
-            threading.Event().wait(retry_interval)
-        else:
-            pass
+            logger.info(f"Job {job_id} failed, retrying in {retry_interval} seconds...")
+            import time
+            time.sleep(retry_interval)
+
+    logger.error(f"Job {job_id} failed after {max_retries} attempts")
 
 
 class SchedulerManager:
