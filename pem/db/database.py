@@ -8,7 +8,6 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.orm import declarative_base
 
 from pem.settings import DATABASE_URL
-from pem.performance_config import DATABASE_PERFORMANCE_CONFIG, get_optimized_config
 
 Base = declarative_base()
 logger = logging.getLogger(__name__)
@@ -39,7 +38,7 @@ SessionLocal = async_sessionmaker(
 
 
 @event.listens_for(Engine, "connect")
-def _set_sqlite_pragma(dbapi_connection, connection_record):
+def _set_sqlite_pragma(dbapi_connection, connection_record) -> None:
     """Set SQLite pragmas for better performance."""
     if "sqlite" in str(dbapi_connection):
         cursor = dbapi_connection.cursor()
@@ -68,7 +67,7 @@ async def create_db_and_tables() -> None:
         await conn.run_sync(_create_performance_indexes)
 
 
-def _create_performance_indexes(conn):
+def _create_performance_indexes(conn) -> None:
     """Create additional performance indexes."""
     try:
         # Index for job lookups by name (most common operation)

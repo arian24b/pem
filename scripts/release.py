@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 
 # Configure logging
-logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
+logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
 
 
@@ -32,7 +32,7 @@ def check_environment() -> None:
         run_command(["uv", "--version"])
         logger.info("  ✅ UV is available")
     except subprocess.CalledProcessError:
-        logger.error("  ❌ UV is not available")
+        logger.exception("  ❌ UV is not available")
         sys.exit(1)
 
     # Check if Git is clean
@@ -55,7 +55,7 @@ def run_tests() -> None:
         run_command(["uv", "run", "--group", "dev", "pytest", "--cov=pem", "--cov-report=term-missing"])
         logger.info("  ✅ All tests passed")
     except subprocess.CalledProcessError:
-        logger.error("  ❌ Tests failed")
+        logger.exception("  ❌ Tests failed")
         sys.exit(1)
 
 
@@ -68,14 +68,14 @@ def run_linting() -> None:
         run_command(["uv", "run", "--group", "dev", "ruff", "check", "pem/"])
         logger.info("  ✅ Ruff linting passed")
     except subprocess.CalledProcessError:
-        logger.error("  ❌ Ruff linting failed")
+        logger.exception("  ❌ Ruff linting failed")
         sys.exit(1)
 
     try:
         run_command(["uv", "run", "--group", "dev", "ruff", "format", "--check", "pem/"])
         logger.info("  ✅ Ruff formatting check passed")
     except subprocess.CalledProcessError:
-        logger.error("  ❌ Ruff formatting check failed")
+        logger.exception("  ❌ Ruff formatting check failed")
         sys.exit(1)
 
     # Run mypy for type checking
@@ -83,7 +83,7 @@ def run_linting() -> None:
         run_command(["uv", "run", "--group", "dev", "mypy", "pem/"])
         logger.info("  ✅ MyPy type checking passed")
     except subprocess.CalledProcessError:
-        logger.error("  ❌ MyPy type checking failed")
+        logger.exception("  ❌ MyPy type checking failed")
         sys.exit(1)
 
 
@@ -95,7 +95,7 @@ def build_package() -> None:
         run_command(["uv", "build"])
         logger.info("  ✅ Package built successfully")
     except subprocess.CalledProcessError:
-        logger.error("  ❌ Package build failed")
+        logger.exception("  ❌ Package build failed")
         sys.exit(1)
 
 
@@ -107,7 +107,7 @@ def build_binary() -> None:
         run_command(["python", "scripts/build_binary.py"])
         logger.info("  ✅ Binary built successfully")
     except subprocess.CalledProcessError:
-        logger.error("  ❌ Binary build failed")
+        logger.exception("  ❌ Binary build failed")
         sys.exit(1)
 
 
@@ -130,7 +130,7 @@ def publish_package(test_pypi: bool = False, token: str | None = None) -> None:
         run_command(cmd)
         logger.info(f"  ✅ Package published to {repository} successfully")
     except subprocess.CalledProcessError:
-        logger.error(f"  ❌ Package publication to {repository} failed")
+        logger.exception(f"  ❌ Package publication to {repository} failed")
         sys.exit(1)
 
 
@@ -144,21 +144,28 @@ def create_github_release() -> None:
             ["python", "-c", "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])"],
             capture_output=True,
             text=True,
-            check=True
+            check=True,
         )
         version = result.stdout.strip()
 
         # Create GitHub release
-        run_command([
-            "gh", "release", "create", f"v{version}",
-            "--title", f"Release v{version}",
-            "--notes", f"Release version {version}",
-            "./dist/pem"  # Attach the binary
-        ])
+        run_command(
+            [
+                "gh",
+                "release",
+                "create",
+                f"v{version}",
+                "--title",
+                f"Release v{version}",
+                "--notes",
+                f"Release version {version}",
+                "./dist/pem",  # Attach the binary
+            ],
+        )
         logger.info(f"  ✅ GitHub release v{version} created successfully")
 
     except subprocess.CalledProcessError as e:
-        logger.error(f"  ❌ GitHub release creation failed: {e}")
+        logger.exception(f"  ❌ GitHub release creation failed: {e}")
         logger.info("  💡 Make sure you have 'gh' CLI installed and authenticated")
 
 

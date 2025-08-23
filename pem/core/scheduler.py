@@ -30,18 +30,17 @@ def _get_cached_job(job_id: int) -> Job | None:
     with _cache_lock:
         if job_id in _job_cache:
             return _job_cache[job_id]
-    
+
     # Not in cache, load from database
     try:
         # Use sync session for scheduler compatibility
-        import sqlite3
         from sqlalchemy import create_engine
         from sqlalchemy.orm import sessionmaker
-        
+
         # Create sync engine for scheduler operations
         sync_engine = create_engine(DATABASE_URL.replace("aiosqlite", "sqlite"))
         SyncSession = sessionmaker(bind=sync_engine)
-        
+
         with SyncSession() as session:
             job = session.query(Job).get(job_id)
             if job:
@@ -49,7 +48,7 @@ def _get_cached_job(job_id: int) -> Job | None:
                     _job_cache[job_id] = job
             return job
     except Exception as e:
-        logger.error(f"Failed to load job {job_id}: {e}")
+        logger.exception(f"Failed to load job {job_id}: {e}")
         return None
 
 
@@ -68,7 +67,7 @@ async def _execute_job_async(job_id: int) -> dict[str, Any]:
     try:
         return await Executor(job).execute()
     except Exception as e:
-        logger.error(f"Job execution failed for job {job_id}: {e}")
+        logger.exception(f"Job execution failed for job {job_id}: {e}")
         return {"status": "FAILED", "error": str(e)}
 
 
@@ -106,6 +105,7 @@ def execute_until_done_standalone(job_id: int, max_retries: int = 10, retry_inte
         if attempt < max_retries:
             logger.info(f"Job {job_id} failed, retrying in {retry_interval} seconds...")
             import time
+
             time.sleep(retry_interval)
 
     logger.error(f"Job {job_id} failed after {max_retries} attempts")

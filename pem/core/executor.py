@@ -54,7 +54,7 @@ class Executor:
                     # Performance optimizations
                     limit=1024 * 1024,  # 1MB buffer limit
                 )
-                
+
                 # Set timeout to prevent hanging processes
                 try:
                     await asyncio.wait_for(process.wait(), timeout=1800)  # 30 minute timeout
@@ -67,10 +67,10 @@ class Executor:
                         process.kill()
                         await process.wait()
                     return -1
-                
+
                 return process.returncode or 0
             except Exception as e:
-                logger.error(f"Command execution failed: {e}")
+                logger.exception(f"Command execution failed: {e}")
                 return -1
 
     async def _execute_script(self, log_file) -> int:
@@ -122,17 +122,18 @@ class Executor:
                 elif self.job.job_type == "project":
                     exit_code = await self._execute_project(log_file)
                 else:
-                    raise ValueError(f"Unsupported job type: {self.job.job_type}")
+                    msg = f"Unsupported job type: {self.job.job_type}"
+                    raise ValueError(msg)
 
         except Exception as e:
-            logger.error(f"Job execution failed for {self.job.name}: {e}")
+            logger.exception(f"Job execution failed for {self.job.name}: {e}")
             exit_code = -1
             # Write error to log file
             try:
                 with open(self.log_path, "a") as log_file:
                     log_file.write(f"\nError: {e!s}\n")
             except Exception as log_error:
-                logger.error(f"Failed to write error to log: {log_error}")
+                logger.exception(f"Failed to write error to log: {log_error}")
 
         end_time = datetime.now(UTC)
         duration = (end_time - start_time).total_seconds()

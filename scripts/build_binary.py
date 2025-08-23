@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 
 # Configure logging
-logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
+logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
 
 
@@ -25,7 +25,7 @@ def clean_build() -> None:
     paths_to_clean = ["build", "dist", "*.egg-info", "__pycache__", ".mypy_cache", ".pytest_cache"]
 
     for pattern in paths_to_clean:
-        for path in Path(".").glob(pattern):
+        for path in Path().glob(pattern):
             if path.exists():
                 if path.is_dir():
                     shutil.rmtree(path)
@@ -44,7 +44,7 @@ def check_dependencies() -> None:
         run_command(["uv", "--version"])
         logger.info("  ✅ UV is available")
     except subprocess.CalledProcessError:
-        logger.error("  ❌ UV is not available")
+        logger.exception("  ❌ UV is not available")
         sys.exit(1)
 
     # Check if PyInstaller is available in build group
@@ -114,7 +114,7 @@ def test_binary() -> None:
         logger.info(f"  📍 Binary location: {binary_path.absolute()}")
 
     except subprocess.CalledProcessError as e:
-        logger.error(f"  ❌ Binary test failed: {e}")
+        logger.exception(f"  ❌ Binary test failed: {e}")
     except Exception as e:
         logger.exception(f"  ❌ Unexpected error during binary test: {e}")
 
@@ -128,38 +128,64 @@ def create_binary() -> None:
 
     # Build command with comprehensive options for performance
     cmd = [
-        "uv", "run", "--group", "build", "pyinstaller",
-        "--onefile",                    # Create a one-file bundled executable
-        "--name", "pem",                # Name of the executable
-        "--console",                    # Console application
-        "--clean",                      # Clean PyInstaller cache
-        "--noconfirm",                  # Replace output directory without asking
-        "--optimize", "2",              # Bytecode optimization level
-        "--strip",                      # Strip debug information (Unix only)
-        "--distpath", "./dist",         # Output directory
-        "--specpath", "./build",        # Spec file directory
+        "uv",
+        "run",
+        "--group",
+        "build",
+        "pyinstaller",
+        "--onefile",  # Create a one-file bundled executable
+        "--name",
+        "pem",  # Name of the executable
+        "--console",  # Console application
+        "--clean",  # Clean PyInstaller cache
+        "--noconfirm",  # Replace output directory without asking
+        "--optimize",
+        "2",  # Bytecode optimization level
+        "--strip",  # Strip debug information (Unix only)
+        "--distpath",
+        "./dist",  # Output directory
+        "--specpath",
+        "./build",  # Spec file directory
         # Performance optimizations
-        "--exclude-module", "tkinter",  # Exclude unused GUI modules
-        "--exclude-module", "matplotlib",
-        "--exclude-module", "numpy",
-        "--exclude-module", "pandas",
-        "--exclude-module", "PIL",
-        "--exclude-module", "PyQt5",
-        "--exclude-module", "PyQt6",
-        "--exclude-module", "PySide2",
-        "--exclude-module", "PySide6",
-        "--exclude-module", "jupyter",
-        "--exclude-module", "IPython",
+        "--exclude-module",
+        "tkinter",  # Exclude unused GUI modules
+        "--exclude-module",
+        "matplotlib",
+        "--exclude-module",
+        "numpy",
+        "--exclude-module",
+        "pandas",
+        "--exclude-module",
+        "PIL",
+        "--exclude-module",
+        "PyQt5",
+        "--exclude-module",
+        "PyQt6",
+        "--exclude-module",
+        "PySide2",
+        "--exclude-module",
+        "PySide6",
+        "--exclude-module",
+        "jupyter",
+        "--exclude-module",
+        "IPython",
         # Required hidden imports
-        "--hidden-import", "aiosqlite", # Required for database connectivity
-        "--hidden-import", "sqlalchemy.dialects.sqlite.aiosqlite",
-        "--hidden-import", "apscheduler.schedulers.asyncio",
-        "--hidden-import", "apscheduler.executors.pool",
-        "--hidden-import", "apscheduler.jobstores.memory",
-        "--hidden-import", "apscheduler.jobstores.sqlalchemy",
+        "--hidden-import",
+        "aiosqlite",  # Required for database connectivity
+        "--hidden-import",
+        "sqlalchemy.dialects.sqlite.aiosqlite",
+        "--hidden-import",
+        "apscheduler.schedulers.asyncio",
+        "--hidden-import",
+        "apscheduler.executors.pool",
+        "--hidden-import",
+        "apscheduler.jobstores.memory",
+        "--hidden-import",
+        "apscheduler.jobstores.sqlalchemy",
         # Data files
-        "--add-data", f"{standalone_dir / 'pem'}:pem",  # Include pem package
-        str(standalone_dir / "cli_standalone.py"),       # Entry point
+        "--add-data",
+        f"{standalone_dir / 'pem'}:pem",  # Include pem package
+        str(standalone_dir / "cli_standalone.py"),  # Entry point
     ]
 
     try:
@@ -171,7 +197,7 @@ def create_binary() -> None:
             logger.error("  ❌ Binary creation failed")
             sys.exit(1)
     except subprocess.CalledProcessError as e:
-        logger.error(f"  ❌ Binary creation failed: {e}")
+        logger.exception(f"  ❌ Binary creation failed: {e}")
         sys.exit(1)
     finally:
         # Cleanup standalone files
