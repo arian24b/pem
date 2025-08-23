@@ -50,46 +50,8 @@ jobs:
           PYPI_TOKEN: ${{ secrets.PYPI_TOKEN }}
           UV_PUBLISH_TOKEN: ${{ secrets.PYPI_TOKEN }}
 
-      - name: Get release version
-        id: version
-        run: echo "version=$(npx semantic-release --dry-run | grep -oP '(?<=The next release version is ).*')" >> $GITHUB_OUTPUT
-
-  build-binaries:
-    needs: release
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest, macos-latest]
-        include:
-          - os: ubuntu-latest
-            asset_name: pem-linux
-          - os: macos-latest
-            asset_name: pem-macos
-
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v6
-        with:
-          version: "latest"
-
-      - name: Install dependencies with build tools
-        run: uv sync --group build
-
-      - name: Build binary
-        run: uv run scripts/build_binary.py
-
-      - name: Rename binary
-        run: mv dist/pem dist/${{ matrix.asset_name }}
-
-      - name: Upload binary to release
-        uses: svenstaro/upload-release-action@v2
-        with:
-          repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: dist/${{ matrix.asset_name }}
-          asset_name: ${{ matrix.asset_name }}
-          tag: v${{ needs.release.outputs.new_release_version }}
-          overwrite: true
+      - name: Debug semantic-release outputs
+        run: |
+          echo "new_release_published: '${{ steps.semantic.outputs.new_release_published }}'"
+          echo "new_release_version: '${{ steps.semantic.outputs.new_release_version }}'"
+          echo "Type of new_release_published: $(echo '${{ steps.semantic.outputs.new_release_published }}' | wc -c)"
