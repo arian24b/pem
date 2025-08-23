@@ -1,3 +1,10 @@
+# [1.4.0](https://github.com/arian24b/pem/compare/v1.3.0...v1.4.0) (2025-08-23)
+
+
+### Features
+
+* Update commit message template and release configuration; remove unused files ([e9dbf64](https://github.com/arian24b/pem/commit/e9dbf64f5a4d86c2babd8f6cea917e709d5bbb43))
+
 # [1.3.0](https://github.com/arian24b/pem/compare/v1.2.0...v1.3.0) (2025-08-21)
 
 
