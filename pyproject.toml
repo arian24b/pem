@@ -41,13 +41,6 @@ dev = [
     "mypy>=1.8.0",
     "ruff>=0.8.0",
 ]
-build = [
-    "pyinstaller>=6.14.2",
-    "build>=1.0.0",
-]
-release = [
-    "twine>=6.0.0",
-]
 
 [project.scripts]
 pem = "pem.cli:run"
@@ -59,54 +52,20 @@ Issues = "https://github.com/arian24b/pem/issues"
 Changelog = "https://github.com/arian24b/pem/blob/main/CHANGELOG.md"
 Documentation = "https://github.com/arian24b/pem#readme"
 
-# UV Configuration
 [tool.uv]
 package = true
-dev-dependencies = []
 
-# Publishing configuration
 [tool.uv.publish]
-# Default publish settings - can be overridden via CLI
 index = "pypi"
 check-url = true
 
-# Build system configuration
 [build-system]
-requires = ["hatchling>=1.21.0"]
+requires = ["hatchling"]
 build-backend = "hatchling.build"
-
-# Hatchling configuration
-[tool.hatch.version]
-path = "pem/__init__.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["pem"]
 
-[tool.hatch.build.targets.sdist]
-include = [
-    "/pem",
-    "/scripts",
-    "/README.md",
-    "/LICENSE",
-    "/CHANGELOG.md",
-    "/pyproject.toml",
-]
-exclude = [
-    "/.git",
-    "/.github",
-    "/.pytest_cache",
-    "/.mypy_cache",
-    "/.ruff_cache",
-    "/dist",
-    "/build",
-    "**/__pycache__",
-    "**/*.pyc",
-    "**/*.pyo",
-    "/pem.db*",
-    "/logs",
-]
-
-# Code quality tools configuration
 [tool.ruff]
 line-length = 120
 target-version = "py313"
@@ -135,45 +94,4 @@ ignore = [
     "S101",   # Use of assert detected (needed for tests)
     "T20",    # print statements (CLI tool)
     "A003",   # Class attribute shadows builtin
-]
-
-[tool.ruff.lint.per-file-ignores]
-"tests/**/*.py" = ["S101", "S105", "S106"]
-"scripts/**/*.py" = ["T20"]
-
-[tool.mypy]
-python_version = "3.13"
-strict = true
-warn_return_any = true
-warn_unused_configs = true
-disallow_untyped_defs = true
-check_untyped_defs = true
-warn_redundant_casts = true
-warn_unused_ignores = true
-warn_unreachable = true
-show_error_codes = true
-
-[[tool.mypy.overrides]]
-module = [
-    "faker.*",
-    "apscheduler.*",
-    "aiosqlite.*",
-]
-ignore_missing_imports = true
-
-[tool.pytest.ini_options]
-minversion = "8.0"
-addopts = [
-    "--strict-markers",
-    "--strict-config",
-    "--cov=pem",
-    "--cov-report=term-missing",
-    "--cov-report=html",
-    "--cov-report=xml",
-]
-testpaths = ["tests"]
-asyncio_mode = "auto"
-markers = [
-    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
-    "integration: marks tests as integration tests",
 ]
