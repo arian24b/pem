@@ -4,7 +4,7 @@ import asyncio
 import contextlib
 import logging
 import threading
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any, Literal
 
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
@@ -13,23 +13,31 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from pem.core.executor import Executor
 from pem.db.database import SessionLocal
 from pem.db.models import Job
-from pem.settings import DATABASE_URL
+from pem.settings import DATABASE_URL, get_optimized_config
 
 ScheduleType = Literal["once", "interval", "cron", "until_done"]
 
 # Set up logging for better performance monitoring
 logger = logging.getLogger(__name__)
 
-# Job cache for better performance
+# Get optimized configuration
+config = get_optimized_config()
+JOB_CACHE_SIZE = config["job_cache_size"]
+EXECUTION_TIMEOUT = 300  # 5 minutes
+
+# Job cache for better performance with size limit
 _job_cache = {}
 _cache_lock = threading.Lock()
 
 
 def _get_cached_job(job_id: int) -> Job | None:
-    """Get job from cache or database."""
+    """Get job from cache or database with LRU-style management."""
     with _cache_lock:
         if job_id in _job_cache:
-            return _job_cache[job_id]
+            # Move to end (most recently accessed)
+            job = _job_cache.pop(job_id)
+            _job_cache[job_id] = job
+            return job
 
     # Not in cache, load from database
     try:
@@ -39,12 +47,17 @@ def _get_cached_job(job_id: int) -> Job | None:
 
         # Create sync engine for scheduler operations
         sync_engine = create_engine(DATABASE_URL.replace("aiosqlite", "sqlite"))
-        SyncSession = sessionmaker(bind=sync_engine)
+        sync_session = sessionmaker(bind=sync_engine)
 
-        with SyncSession() as session:
+        with sync_session() as session:
             job = session.query(Job).get(job_id)
             if job:
                 with _cache_lock:
+                    # Implement cache size limit
+                    if len(_job_cache) >= JOB_CACHE_SIZE:
+                        # Remove oldest item (first item)
+                        oldest_key = next(iter(_job_cache))
+                        del _job_cache[oldest_key]
                     _job_cache[job_id] = job
             return job
     except Exception as e:
@@ -65,7 +78,8 @@ async def _execute_job_async(job_id: int) -> dict[str, Any]:
         return {"status": "FAILED", "error": "Job not found"}
 
     try:
-        return await Executor(job).execute()
+        executor = Executor(job)
+        return await executor.execute()
     except Exception as e:
         logger.exception(f"Job execution failed for job {job_id}: {e}")
         return {"status": "FAILED", "error": str(e)}
@@ -132,14 +146,20 @@ class SchedulerManager:
 
     async def _execute_job_async(self, job_id: int) -> dict[str, Any]:
         """Execute a job asynchronously."""
-        db = SessionLocal()
-        try:
-            if not (job := db.query(Job).get(job_id)):
-                return {"status": "FAILED", "error": "Job not found"}
+        async with SessionLocal() as db:
+            try:
+                from sqlalchemy import select
 
-            return await Executor(job).execute()
-        finally:
-            db.close()
+                result = await db.execute(select(Job).where(Job.id == job_id))
+                job = result.scalar_one_or_none()
+
+                if not job:
+                    return {"status": "FAILED", "error": "Job not found"}
+
+                return await Executor(job).execute()
+            except Exception as e:
+                logger.exception(f"Database error: {e}")
+                return {"status": "FAILED", "error": str(e)}
 
     def _execute_job_sync(self, job_id: int) -> dict[str, Any]:
         """Execute a job synchronously (wrapper for scheduler)."""
@@ -180,7 +200,7 @@ class SchedulerManager:
             scheduler_job_id: The APScheduler job ID
 
         """
-        scheduler_job_id = f"pem_job_{schedule_type}_{job_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        scheduler_job_id = f"pem_job_{schedule_type}_{job_id}_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}"
 
         match schedule_type:
             case "once":
@@ -235,7 +255,7 @@ class SchedulerManager:
                 # Track this job
                 self.running_jobs[job_id] = {
                     "scheduler_job_id": scheduler_job_id,
-                    "start_time": datetime.now(),
+                    "start_time": datetime.now(UTC),
                     "max_retries": max_retries,
                     "retry_interval": retry_interval,
                 }

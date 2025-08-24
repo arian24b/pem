@@ -28,6 +28,9 @@ dependencies = [
     "apscheduler>=3.11.0",
     "faker>=37.5.3",
     "greenlet>=3.2.3",
+    "platformdirs>=4.3.6",
+    "psutil>=6.1.0",
+    "pydantic>=2.10.0",
     "sqlalchemy>=2.0.41",
     "typer>=0.16.0",
 ]
@@ -35,11 +38,6 @@ dependencies = [
 [dependency-groups]
 dev = [
     "pre-commit>=4.2.0",
-    "pytest>=8.0.0",
-    "pytest-asyncio>=0.24.0",
-    "pytest-cov>=6.0.0",
-    "mypy>=1.8.0",
-    "ruff>=0.8.0",
 ]
 
 [project.scripts]
@@ -52,23 +50,8 @@ Issues = "https://github.com/arian24b/pem/issues"
 Changelog = "https://github.com/arian24b/pem/blob/main/CHANGELOG.md"
 Documentation = "https://github.com/arian24b/pem#readme"
 
-[tool.uv]
-package = true
-
-[tool.uv.publish]
-index = "pypi"
-check-url = true
-
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
-
-[tool.hatch.build.targets.wheel]
-packages = ["pem"]
-
 [tool.ruff]
 line-length = 120
-target-version = "py313"
 fix = true
 show-fixes = true
 
@@ -95,3 +78,13 @@ ignore = [
     "T20",    # print statements (CLI tool)
     "A003",   # Class attribute shadows builtin
 ]
+
+[tool.uv]
+package = true
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["pem"]

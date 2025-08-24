@@ -8,15 +8,16 @@ from pathlib import Path
 from typing import Any
 
 from pem.db.models import Job
-from pem.performance_config import EXECUTOR_PERFORMANCE_CONFIG, get_optimized_config
+from pem.settings import get_optimized_config
 
 # Set up logging for performance monitoring
 logger = logging.getLogger(__name__)
 
 # Get optimized configuration
-_optimized_config = get_optimized_config()
-MAX_CONCURRENT_PROCESSES = _optimized_config.get("max_concurrent_processes", 4)
-PROCESS_TIMEOUT = EXECUTOR_PERFORMANCE_CONFIG.get("process_timeout", 1800)
+config = get_optimized_config()
+MAX_CONCURRENT_PROCESSES = config["max_concurrent_processes"]
+PROCESS_TIMEOUT = config["process_timeout"]
+BUFFER_LIMIT = config["buffer_limit"]
 
 # Process pool for better performance
 SEMAPHORE = asyncio.Semaphore(MAX_CONCURRENT_PROCESSES)
@@ -44,7 +45,7 @@ class Executor:
 
     async def _run_command(self, command: list[str], log_file_handle, cwd: Path | None = None) -> int:
         """Run a command and write output to log file with performance optimizations."""
-        async with _process_semaphore:  # Limit concurrent processes
+        async with SEMAPHORE:  # Limit concurrent processes
             try:
                 process = await asyncio.create_subprocess_exec(
                     *command,
@@ -52,12 +53,12 @@ class Executor:
                     stderr=subprocess.STDOUT,
                     cwd=cwd,
                     # Performance optimizations
-                    limit=1024 * 1024,  # 1MB buffer limit
+                    limit=BUFFER_LIMIT,
                 )
 
                 # Set timeout to prevent hanging processes
                 try:
-                    await asyncio.wait_for(process.wait(), timeout=1800)  # 30 minute timeout
+                    await asyncio.wait_for(process.wait(), timeout=PROCESS_TIMEOUT)
                 except TimeoutError:
                     logger.warning(f"Process timeout for job {self.job.name}, terminating...")
                     process.terminate()

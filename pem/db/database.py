@@ -7,10 +7,14 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.orm import declarative_base
 
-from pem.settings import DATABASE_URL
+from pem.settings import DATABASE_URL, get_database_config, get_optimized_config
 
 Base = declarative_base()
 logger = logging.getLogger(__name__)
+
+# Get optimized configuration
+config = get_optimized_config()
+db_config = get_database_config()
 
 # Performance optimizations for SQLite
 engine = create_async_engine(
@@ -19,11 +23,11 @@ engine = create_async_engine(
         "check_same_thread": False,
         "timeout": 20,
     },
-    # Connection pool settings for better performance
-    pool_size=20,
-    max_overflow=0,
-    pool_pre_ping=True,
-    pool_recycle=3600,
+    # Use dynamic configuration
+    pool_size=db_config["pool_size"],
+    max_overflow=db_config["max_overflow"],
+    pool_pre_ping=db_config["pool_pre_ping"],
+    pool_recycle=db_config["pool_recycle"],
     # Performance tuning
     echo=False,
     future=True,
@@ -42,20 +46,23 @@ def _set_sqlite_pragma(dbapi_connection, connection_record) -> None:
     """Set SQLite pragmas for better performance."""
     if "sqlite" in str(dbapi_connection):
         cursor = dbapi_connection.cursor()
+        # Use dynamic configuration
+        db_config = get_database_config()
+
         # Enable WAL mode for better concurrency
-        cursor.execute("PRAGMA journal_mode=WAL")
-        # Increase cache size (negative = KB, positive = pages)
-        cursor.execute("PRAGMA cache_size=-64000")  # 64MB cache
+        cursor.execute(f"PRAGMA journal_mode={db_config['journal_mode']}")
+        # Dynamic cache size based on system resources
+        cursor.execute(f"PRAGMA cache_size={db_config['cache_size']}")
         # Synchronous mode for performance vs durability balance
-        cursor.execute("PRAGMA synchronous=NORMAL")
-        # Memory-mapped I/O
-        cursor.execute("PRAGMA mmap_size=268435456")  # 256MB
+        cursor.execute(f"PRAGMA synchronous={db_config['synchronous']}")
+        # Memory-mapped I/O with dynamic size
+        cursor.execute(f"PRAGMA mmap_size={db_config['mmap_size']}")
         # Optimize for faster writes
-        cursor.execute("PRAGMA temp_store=MEMORY")
+        cursor.execute(f"PRAGMA temp_store={db_config['temp_store']}")
         # Foreign key support
-        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.execute(f"PRAGMA foreign_keys={db_config['foreign_keys']}")
         # Auto vacuum for maintenance
-        cursor.execute("PRAGMA auto_vacuum=INCREMENTAL")
+        cursor.execute(f"PRAGMA auto_vacuum={db_config['auto_vacuum']}")
         cursor.close()
 
 

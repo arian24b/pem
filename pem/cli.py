@@ -51,6 +51,11 @@ app = AsyncTyper(
     no_args_is_help=True,
 )
 
+# Add config subcommand
+from pem.commands.config import config_app
+
+app.add_typer(config_app)
+
 
 @app.callback()
 async def main() -> None:
