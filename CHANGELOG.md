@@ -1,3 +1,10 @@
+# [1.5.0](https://github.com/arian24b/pem/compare/v1.4.1...v1.5.0) (2025-08-24)
+
+
+### Features
+
+* Add configuration management commands to PEM CLI ([dd95fbe](https://github.com/arian24b/pem/commit/dd95fbe23462613de118dc0351ffad33122d18ef))
+
 ## [1.4.1](https://github.com/arian24b/pem/compare/v1.4.0...v1.4.1) (2025-08-23)
 
 # [1.4.0](https://github.com/arian24b/pem/compare/v1.3.0...v1.4.0) (2025-08-23)
