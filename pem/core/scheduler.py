@@ -178,7 +178,7 @@ class SchedulerManager:
 
             result = self._execute_job_sync(job_id)
 
-            if result["status"] == "SUCCEEDED":
+            if result["status"] == "SUCCESS":
                 # Remove from running jobs tracker
                 if job_id in self.running_jobs:
                     del self.running_jobs[job_id]
