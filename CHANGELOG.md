@@ -1,3 +1,10 @@
+## [1.5.1](https://github.com/arian24b/pem/compare/v1.5.0...v1.5.1) (2025-09-01)
+
+
+### Bug Fixes
+
+* Correct job status check from "SUCCEEDED" to "SUCCESS" ([76d77a6](https://github.com/arian24b/pem/commit/76d77a60bee0d986d753738c286214e3c4850f98))
+
 # [1.5.0](https://github.com/arian24b/pem/compare/v1.4.1...v1.5.0) (2025-08-24)
 
 
