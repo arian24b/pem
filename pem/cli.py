@@ -1,6 +1,9 @@
 import asyncio
 import inspect
-from enum import Enum
+import signal
+import threading
+import time
+from enum import StrEnum
 from functools import partial, wraps
 from typing import Annotated
 
@@ -12,9 +15,17 @@ from pem.core.executor import Executor
 from pem.core.scheduler import scheduler_manager
 from pem.db.database import SessionLocal, create_db_and_tables
 from pem.db.models import Job
+from pem.logging_utils import configure_logging
+from pem.service import (
+    ensure_pem_installed,
+    ensure_uv_installed,
+    install_service,
+    start_service,
+    update_uv,
+)
 
 
-class ScheduleTypeEnum(str, Enum):
+class ScheduleTypeEnum(StrEnum):
     """Schedule type enumeration for CLI."""
 
     once = "once"
@@ -53,13 +64,16 @@ app = AsyncTyper(
 
 # Add config subcommand
 from pem.commands.config import config_app
+from pem.commands.service import service_app
 
 app.add_typer(config_app)
+app.add_typer(service_app)
 
 
 @app.callback()
 async def main() -> None:
     """Initialize the database."""
+    configure_logging()
     await create_db_and_tables()
 
 
@@ -110,7 +124,7 @@ async def add_job(
             raise typer.Exit(1)
 
         job = Job(
-            name=name if name else Faker().first_name(),
+            name=name or Faker().first_name(),
             job_type="script" if is_script else "project",
             path=path,
             dependencies=dependencies,
@@ -195,9 +209,14 @@ async def update_job(
     name: Annotated[str | None, typer.Option("--name", "-n", help="New name for the job.", show_default=False)] = None,
     path: Annotated[str | None, typer.Option("--path", "-p", help="New path for the job.", show_default=False)] = None,
     is_script: Annotated[
-        bool,
-        typer.Option("--script", "-s", help="Change job type to script.", show_default=False),
-    ] = False,
+        bool | None,
+        typer.Option(
+            "--script/--project",
+            "-s",
+            help="Change job type to script or project.",
+            show_default=False,
+        ),
+    ] = None,
     dependencies: Annotated[
         list[str] | None,
         typer.Option("--with", "-w", help="Update dependencies (scripts only).", show_default=False),
@@ -207,9 +226,9 @@ async def update_job(
         typer.Option("--python", "-v", help="Update Python version requirement.", show_default=False),
     ] = None,
     is_enabled: Annotated[
-        bool,
+        bool | None,
         typer.Option("--enabled/--disabled", "-e", help="Enable or disable the job.", show_default=False),
-    ] = True,
+    ] = None,
 ) -> None:
     async with SessionLocal() as session:
         if not job_id and not name:
@@ -228,12 +247,14 @@ async def update_job(
             job.name = name
         if path:
             job.path = path
-        job.job_type = "script" if is_script else "project"
+        if is_script is not None:
+            job.job_type = "script" if is_script else "project"
         if dependencies:
             job.dependencies = dependencies
         if python_version:
             job.python_version = python_version
-        job.is_enabled = is_enabled
+        if is_enabled is not None:
+            job.is_enabled = is_enabled
 
         await session.commit()
         await session.refresh(job)
@@ -491,6 +512,48 @@ async def cancel_scheduled_job(
         typer.echo("💡 Use 'pem crons' to see all scheduled jobs and their IDs.")
 
 
+@app.command(name="daemon", help="Run the PEM scheduler daemon.")
+def run_daemon() -> None:
+    """Run the PEM scheduler daemon in the foreground."""
+    stop_event = threading.Event()
+
+    def _handle_stop(*_args) -> None:
+        stop_event.set()
+
+    signal.signal(signal.SIGTERM, _handle_stop)
+    signal.signal(signal.SIGINT, _handle_stop)
+
+    typer.echo("🧭 PEM daemon running. Press Ctrl+C to stop.")
+    while not stop_event.is_set():
+        time.sleep(1)
+
+    scheduler_manager.shutdown()
+    typer.echo("🛑 PEM daemon stopped")
+
+
+@app.command(name="install", help="Install PEM and set up the background service.")
+def install_pem() -> None:
+    """Install PEM, ensure uv, and configure the service."""
+    typer.echo("📦 Ensuring PEM is installed...")
+    ensure_pem_installed()
+    typer.echo("🧰 Ensuring uv is installed...")
+    ensure_uv_installed()
+    typer.echo("🛠 Installing PEM service...")
+    install_service()
+    start_service()
+    typer.echo("✅ PEM installed and service started")
+
+
+@app.command(name="update", help="Update PEM and uv.")
+def update_pem() -> None:
+    """Update PEM and uv to the latest version."""
+    typer.echo("⬆️ Updating PEM...")
+    ensure_pem_installed()
+    typer.echo("⬆️ Updating uv...")
+    update_uv()
+    typer.echo("✅ Update complete")
+
+
 @app.command(name="status", help="Display system overview with job counts and scheduling statistics.")
 async def show_status() -> None:
     """Show system status including job counts and scheduled jobs."""
@@ -523,6 +586,12 @@ async def show_status() -> None:
             typer.echo(f"   {job['id']} - Next: {job['next_run']}")
     else:
         typer.echo("💡 No jobs are currently scheduled. Use 'pem cron' to schedule jobs.")
+
+
+# Aliases for common commands
+app.command(name="schedule", help="Alias for pem cron")(schedule_job)
+app.command(name="jobs", help="Alias for pem show")(show_jobs)
+app.command(name="schedules", help="Alias for pem crons")(list_scheduled_jobs)
 
 
 def run() -> None:

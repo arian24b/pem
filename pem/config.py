@@ -31,7 +31,9 @@ class PEMConfig(BaseModel):
     # Execution settings
     auto_run: bool = True
     default_python_version: str | None = None
-    logs_directory: str = "./logs"
+    logs_directory: str | None = None
+    log_rotate_max_bytes: int = 10 * 1024 * 1024
+    log_rotate_backups: int = 5
 
     # UI/UX settings
     show_progress: bool = True
@@ -61,7 +63,15 @@ class PEMConfig(BaseModel):
         if self._cached_logs_dir:
             return self._cached_logs_dir
 
-        logs_path = Path(self.logs_directory).resolve()
+        if self.logs_directory:
+            logs_path = Path(self.logs_directory).expanduser().resolve()
+        else:
+            try:
+                from platformdirs import user_log_dir
+
+                logs_path = Path(user_log_dir("pem"))
+            except ImportError:
+                logs_path = Path.home() / ".local" / "state" / "pem" / "logs"
         logs_path.mkdir(parents=True, exist_ok=True)
         self._cached_logs_dir = logs_path
         return logs_path
@@ -209,6 +219,12 @@ class ConfigManager:
             if self._config.max_concurrent_processes is not None and not (
                 1 <= self._config.max_concurrent_processes <= 64
             ):
+                return False
+
+            if self._config.log_rotate_max_bytes < 1048576:
+                return False
+
+            if self._config.log_rotate_backups < 1:
                 return False
 
             return not (self._config.cache_size is not None and not 1000 <= self._config.cache_size <= 1000000)

@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from pem.config import get_config
 from pem.db.models import Job
 from pem.settings import get_optimized_config
 
@@ -28,9 +29,10 @@ class Executor:
 
     def __init__(self, job: Job) -> None:
         self.job = job
-        self.logs_dir = Path("./logs").resolve()
-        self.logs_dir.mkdir(exist_ok=True)
+        self.app_config = get_config()
+        self.logs_dir = self.app_config.get_logs_directory()
         self.log_path = self.logs_dir / f"{self.job.name}_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}.log"
+        self.python_version = self.job.python_version or self.app_config.default_python_version
 
         # Set up paths based on job type
         match self.job.job_type:
@@ -38,7 +40,8 @@ class Executor:
                 self.script_path = Path(self.job.path).resolve()
             case "project":
                 self.project_path = Path(self.job.path).resolve()
-                self.venv_path = self.project_path / ".pem_venv"
+                self.venv_path = self.project_path / ".venv"
+                self.venv_python = self.venv_path / "bin" / "python"
             case _:
                 msg = f"Unsupported job type: {self.job.job_type}, it must be either 'script' or 'project'."
                 raise ValueError(msg)
@@ -74,31 +77,104 @@ class Executor:
                 logger.exception(f"Command execution failed: {e}")
                 return -1
 
-    async def _execute_script(self, log_file) -> int:
-        """Execute a script job using 'uv run' with optimizations."""
-        command = ["uv", "run", "--no-project"]
-        if self.job.python_version:
-            command.extend(["--python", str(self.job.python_version)])
-        if self.job.dependencies:
-            for dep in self.job.dependencies:
-                command.extend(["--with", dep])
+    def _build_uv_run_command(self, args: list[str], *, no_project: bool, python: str | None) -> list[str]:
+        command = ["uv", "run"]
+        if no_project:
+            command.append("--no-project")
+        if python:
+            command.extend(["--python", str(python)])
+        command.extend(args)
+        return command
 
-        command.append(str(self.script_path))
+    async def _execute_script_path(self, log_file, script_path: Path, dependencies: list[str] | None) -> int:
+        """Execute a script path using uv run."""
+        command = ["uv", "run", "--no-project"]
+        if self.python_version:
+            command.extend(["--python", str(self.python_version)])
+        if dependencies:
+            for dep in dependencies:
+                command.extend(["--with", dep])
+        command.append(str(script_path))
         log_file.write(f"--- Running command: {' '.join(command)} ---\n\n")
         return await self._run_command(command, log_file)
 
+    def _project_context(self) -> tuple[bool, bool]:
+        pyproject = self.project_path / "pyproject.toml"
+        requirements = self.project_path / "requirements.txt"
+        return pyproject.exists(), requirements.exists()
+
+    def _project_entry_command(self) -> list[str]:
+        if (self.project_path / "main.py").exists():
+            return ["python", "main.py"]
+        if (self.project_path / "app.py").exists():
+            return ["python", "app.py"]
+        if (self.project_path / "__main__.py").exists():
+            return ["python", "-m", self.project_path.name]
+        return ["python", "-m", self.project_path.name]
+
+    async def _ensure_project_environment(self, log_file, has_pyproject: bool, has_requirements: bool) -> bool:
+        if has_pyproject:
+            if not self.venv_path.exists():
+                command = ["uv", "sync"]
+                if self.python_version:
+                    command.extend(["--python", str(self.python_version)])
+                log_file.write(f"--- Preparing environment: {' '.join(command)} ---\n\n")
+                return await self._run_command(command, log_file, cwd=self.project_path) == 0
+            return True
+
+        if has_requirements:
+            if not self.venv_python.exists():
+                command = ["uv", "venv"]
+                if self.python_version:
+                    command.extend(["--python", str(self.python_version)])
+                log_file.write(f"--- Preparing environment: {' '.join(command)} ---\n\n")
+                if await self._run_command(command, log_file, cwd=self.project_path) != 0:
+                    return False
+
+                install_command = [
+                    "uv",
+                    "pip",
+                    "install",
+                    "-r",
+                    "requirements.txt",
+                    "--python",
+                    str(self.venv_python),
+                ]
+                log_file.write(f"--- Installing requirements: {' '.join(install_command)} ---\n\n")
+                return await self._run_command(install_command, log_file, cwd=self.project_path) == 0
+            return True
+
+        return True
+
+    async def _execute_script(self, log_file) -> int:
+        """Execute a script job using 'uv run' with optimizations."""
+        return await self._execute_script_path(log_file, self.script_path, self.job.dependencies)
+
     async def _execute_project(self, log_file) -> int:
         """Execute a project job with optimizations."""
-        # Change to project directory and run the main module
-        if (self.project_path / "main.py").exists():
-            command = ["uv", "run", "python", "main.py"]
-        elif (self.project_path / "app.py").exists():
-            command = ["uv", "run", "python", "app.py"]
-        elif (self.project_path / "__main__.py").exists():
-            command = ["uv", "run", "python", "-m", self.project_path.name]
+        if self.project_path.is_file():
+            return await self._execute_script_path(log_file, self.project_path, None)
+
+        has_pyproject, has_requirements = self._project_context()
+        if not has_pyproject and not has_requirements:
+            entry_command = self._project_entry_command()
+            if entry_command[:2] == ["python", "-m"]:
+                command = self._build_uv_run_command(entry_command, no_project=True, python=self.python_version)
+                log_file.write(f"--- Running command: {' '.join(command)} ---\n\n")
+                return await self._run_command(command, log_file, cwd=self.project_path)
+
+            entry_path = self.project_path / entry_command[-1]
+            return await self._execute_script_path(log_file, entry_path, None)
+
+        if not await self._ensure_project_environment(log_file, has_pyproject, has_requirements):
+            return -1
+
+        entry_command = self._project_entry_command()
+        if has_requirements:
+            python_path = str(self.venv_python) if self.venv_python.exists() else None
+            command = self._build_uv_run_command(entry_command, no_project=True, python=python_path)
         else:
-            # Fallback: try to run the project as a module
-            command = ["uv", "run", "python", "-m", self.project_path.name]
+            command = self._build_uv_run_command(entry_command, no_project=False, python=self.python_version)
 
         log_file.write(f"--- Running command: {' '.join(command)} ---\n\n")
         return await self._run_command(command, log_file, cwd=self.project_path)

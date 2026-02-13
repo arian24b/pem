@@ -126,3 +126,11 @@ def get_database_config() -> dict[str, Any]:
         "pool_pre_ping": True,
         "pool_recycle": 3600,
     }
+
+
+def get_sync_database_url() -> str:
+    """Get a synchronous database URL for non-async clients."""
+    database_url = get_database_config()["database_url"]
+    if database_url.startswith("sqlite+aiosqlite"):
+        return database_url.replace("sqlite+aiosqlite", "sqlite", 1)
+    return database_url

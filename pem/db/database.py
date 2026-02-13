@@ -7,7 +7,7 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.orm import declarative_base
 
-from pem.settings import DATABASE_URL, get_database_config, get_optimized_config
+from pem.settings import get_database_config, get_optimized_config
 
 Base = declarative_base()
 logger = logging.getLogger(__name__)
@@ -18,7 +18,7 @@ db_config = get_database_config()
 
 # Performance optimizations for SQLite
 engine = create_async_engine(
-    DATABASE_URL,
+    db_config["database_url"],
     connect_args={
         "check_same_thread": False,
         "timeout": 20,

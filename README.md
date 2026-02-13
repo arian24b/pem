@@ -70,6 +70,25 @@ uv run pem --help
 pip install pemexe
 ```
 
+### 🧩 Self Install + Service (Recommended)
+PEM can install itself and register a background service so schedules run continuously.
+
+```bash
+# Install pem + uv (if missing) and start the service
+pem install
+
+# Check service status
+pem service status
+
+# Update pem and uv later
+pem update
+```
+
+**Service details**
+- macOS: launchd user agent (`~/Library/LaunchAgents/com.pem.daemon.plist`)
+- Linux: systemd user service (`~/.config/systemd/user/pem.service`)
+- Service runs: `python -m pem.cli daemon`
+
 #### Option 3: Download Binary
 ```bash
 # Download the latest binary from releases
@@ -177,6 +196,8 @@ pem add --path ./script.py --script --python 3.11 --with numpy
 #### `pem show` - Display Job Information
 Display details of jobs (all jobs if no filter specified).
 
+**Aliases:** `pem jobs`
+
 ```bash
 # Show all jobs
 pem show
@@ -241,6 +262,8 @@ pem run --id 1 --schedule --type interval --minutes 1440
 #### `pem cron` - Advanced Job Scheduling
 Schedule a job for automatic execution using various timing options.
 
+**Aliases:** `pem schedule`
+
 ```bash
 # Schedule every 30 minutes
 pem cron --name "monitor" --type interval --minutes 30
@@ -263,6 +286,8 @@ pem cron --name "flaky-job" --type until_done --max-retries 5 --retry-interval 3
 
 #### `pem crons` - List Scheduled Jobs
 List all jobs currently scheduled for automatic execution.
+
+**Aliases:** `pem schedules`
 
 ```bash
 pem crons
@@ -310,7 +335,7 @@ PEM is built with modern Python technologies:
 PEM works out of the box with minimal configuration:
 
 - **Database**: SQLite (`pem.db`) in working directory
-- **Logs**: Stored in `./logs/` with timestamped filenames
+- **Logs**: Stored in OS-specific log directory with rotation (see below)
 - **Auto-initialization**: Database and tables created automatically
 - **Environment Isolation**: Uses proper Python environment handling
 
@@ -327,7 +352,7 @@ pem/
 │   └── db/
 │       ├── database.py     # Database configuration & sessions
 │       └── models.py       # SQLAlchemy data models
-├── logs/                   # Execution logs directory
+├── logs/                   # Execution logs directory (legacy)
 ├── pem.db                 # SQLite database file
 └── pyproject.toml         # Project configuration with uv
 ```
@@ -431,6 +456,20 @@ uv build                    # Build wheel and source dist
 uv publish --token $TOKEN   # Publish to PyPI
 ```
 
+## 🧾 Logs & Rotation
+
+PEM writes logs to your OS-specific log directory and rotates them automatically.
+
+Default log paths:
+- macOS: `~/Library/Logs/pem/`
+- Linux: `~/.local/state/pem/logs/`
+
+Rotation defaults:
+- Max size: 10 MB
+- Backups kept: 5
+
+You can override these in `pem config`.
+
 #### Project Structure
 ```
 pem/
@@ -523,3 +562,27 @@ MIT License - see [LICENSE](LICENSE) file for details.
 **Made with ❤️ by [Arian Omrani](https://github.com/arian24b)**
 
 *PEM - Schedule and execute Python scripts and projects with ease* 🐍✨
+#### `pem install` - Self Install + Service
+Installs PEM (pip), ensures uv, and configures the background service.
+
+```bash
+pem install
+```
+
+#### `pem update` - Self Update
+Updates PEM and uv.
+
+```bash
+pem update
+```
+
+#### `pem service` - Service Management
+Manage the background service.
+
+```bash
+pem service status
+pem service start
+pem service stop
+pem service restart
+pem service uninstall
+```

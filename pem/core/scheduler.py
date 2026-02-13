@@ -11,9 +11,8 @@ from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 from apscheduler.schedulers.background import BackgroundScheduler
 
 from pem.core.executor import Executor
-from pem.db.database import SessionLocal
 from pem.db.models import Job
-from pem.settings import DATABASE_URL, get_optimized_config
+from pem.settings import get_optimized_config, get_sync_database_url
 
 ScheduleType = Literal["once", "interval", "cron", "until_done"]
 
@@ -23,7 +22,6 @@ logger = logging.getLogger(__name__)
 # Get optimized configuration
 config = get_optimized_config()
 JOB_CACHE_SIZE = config["job_cache_size"]
-EXECUTION_TIMEOUT = 300  # 5 minutes
 
 # Job cache for better performance with size limit
 _job_cache = {}
@@ -46,7 +44,7 @@ def _get_cached_job(job_id: int) -> Job | None:
         from sqlalchemy.orm import sessionmaker
 
         # Create sync engine for scheduler operations
-        sync_engine = create_engine(DATABASE_URL.replace("aiosqlite", "sqlite"))
+        sync_engine = create_engine(get_sync_database_url())
         sync_session = sessionmaker(bind=sync_engine)
 
         with sync_session() as session:
@@ -130,7 +128,7 @@ class SchedulerManager:
 
     def __init__(self) -> None:
         self.scheduler = BackgroundScheduler()
-        self.scheduler.add_jobstore(SQLAlchemyJobStore(url=DATABASE_URL), "default")
+        self.scheduler.add_jobstore(SQLAlchemyJobStore(url=get_sync_database_url()), "default")
         self.running_jobs = {}  # Track running until_done jobs
         self._setup_scheduler()
 
@@ -143,50 +141,6 @@ class SchedulerManager:
         """Shutdown the scheduler."""
         if self.scheduler.running:
             self.scheduler.shutdown()
-
-    async def _execute_job_async(self, job_id: int) -> dict[str, Any]:
-        """Execute a job asynchronously."""
-        async with SessionLocal() as db:
-            try:
-                from sqlalchemy import select
-
-                result = await db.execute(select(Job).where(Job.id == job_id))
-                job = result.scalar_one_or_none()
-
-                if not job:
-                    return {"status": "FAILED", "error": "Job not found"}
-
-                return await Executor(job).execute()
-            except Exception as e:
-                logger.exception(f"Database error: {e}")
-                return {"status": "FAILED", "error": str(e)}
-
-    def _execute_job_sync(self, job_id: int) -> dict[str, Any]:
-        """Execute a job synchronously (wrapper for scheduler)."""
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            return loop.run_until_complete(self._execute_job_async(job_id))
-        finally:
-            loop.close()
-
-    def _execute_until_done(self, job_id: int, max_retries: int = 10, retry_interval: int = 60) -> None:
-        """Execute a job repeatedly until it succeeds or max retries reached."""
-        attempt = 0
-        while attempt < max_retries:
-            attempt += 1
-
-            result = self._execute_job_sync(job_id)
-
-            if result["status"] == "SUCCESS":
-                # Remove from running jobs tracker
-                if job_id in self.running_jobs:
-                    del self.running_jobs[job_id]
-                break
-            if attempt < max_retries:
-                threading.Event().wait(retry_interval)
-            elif job_id in self.running_jobs:
-                del self.running_jobs[job_id]
 
     def schedule_job(self, job_id: int, schedule_type: ScheduleType, **kwargs) -> str:
         """Schedule a job with different scheduling options.
@@ -291,7 +245,7 @@ class SchedulerManager:
                     "id": info["scheduler_job_id"],
                     "next_run": "running until done",
                     "trigger": "until_done",
-                    "func": "_execute_until_done",
+                    "func": "execute_until_done_standalone",
                     "start_time": info["start_time"],
                     "max_retries": info["max_retries"],
                 },

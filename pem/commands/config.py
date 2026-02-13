@@ -49,6 +49,8 @@ def show_config() -> None:
             "auto_run": "Auto-run jobs after creation",
             "default_python_version": "Default Python version",
             "logs_directory": "Logs directory path",
+            "log_rotate_max_bytes": "Log rotation max size (bytes)",
+            "log_rotate_backups": "Log rotation backup count",
             "show_progress": "Show progress indicators",
             "colored_output": "Use colored output",
             "emoji_output": "Use emoji in output",
