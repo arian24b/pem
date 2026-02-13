@@ -24,20 +24,15 @@ classifiers = [
     "Typing :: Typed",
 ]
 dependencies = [
-    "aiosqlite>=0.21.0",
-    "apscheduler>=3.11.0",
-    "faker>=37.5.3",
-    "greenlet>=3.2.3",
-    "platformdirs>=4.3.6",
-    "psutil>=6.1.0",
-    "pydantic>=2.10.0",
-    "sqlalchemy>=2.0.41",
-    "typer>=0.16.0",
-]
-
-[dependency-groups]
-dev = [
-    "pre-commit>=4.2.0",
+    "aiosqlite>=0.22.1",
+    "apscheduler>=3.11.2",
+    "faker>=40.4.0",
+    "greenlet>=3.3.1",
+    "platformdirs>=4.7.1",
+    "psutil>=7.2.2",
+    "pydantic>=2.12.5",
+    "sqlalchemy>=2.0.46",
+    "typer>=0.23.1",
 ]
 
 [project.scripts]
@@ -52,8 +47,14 @@ Documentation = "https://github.com/arian24b/pem#readme"
 
 [tool.ruff]
 line-length = 120
+indent-width = 4
+respect-gitignore = true
 fix = true
 show-fixes = true
+
+[tool.ruff.format]
+docstring-code-format = true
+docstring-code-line-length = "dynamic"
 
 [tool.ruff.lint]
 select = [
