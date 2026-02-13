@@ -1,3 +1,11 @@
+# [1.6.0](https://github.com/arian24b/pem/compare/v1.5.1...v1.6.0) (2026-02-13)
+
+
+### Features
+
+* add dependabot configuration for GitHub Actions and Python updates ([3dbe022](https://github.com/arian24b/pem/commit/3dbe0223748b8f9f1fc4025ebcd6a51b6e31f68a))
+* implement service management commands and logging configuration ([04bf950](https://github.com/arian24b/pem/commit/04bf950b42dd9bb0764cd9fcc765d96b32ad0986))
+
 ## [1.5.1](https://github.com/arian24b/pem/compare/v1.5.0...v1.5.1) (2025-09-01)
 
 
