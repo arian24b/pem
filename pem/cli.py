@@ -1,5 +1,6 @@
 import asyncio
 import inspect
+import random
 import signal
 import threading
 import time
@@ -8,7 +9,7 @@ from functools import partial, wraps
 from typing import Annotated
 
 import typer
-from faker import Faker
+from rich.console import Console
 from sqlalchemy.future import select
 
 from pem.core.executor import Executor
@@ -23,6 +24,32 @@ from pem.service import (
     start_service,
     update_uv,
 )
+
+console = Console()
+
+BANNER = r"""
+    ____
+   / __ \__ _  __ _  ___      | |  ___ _ __    ___  _ __  __| | ___
+  | |  |/ _` |/ _` |/ _ \     | | / _ \ '_ \  / _ \| '__|/ _` |/ _ \
+  | |__| (_| | (_| |  __/     | ||  __/ | | ||  __/| |  | (_| |  __/
+   \____\__,_|\__, |\___|     |_| \___|_| |_| \___||_|   \__,_|\___|
+              |___/
+   _   _           _                 _  __     __
+  | \ | | ___   __| | ___  ___  __| |/ _|   / _| ___  ___
+  |  \| |/ _ \ / _` |/ _ \/ __|/ _` | |_   | |_ / _ \/ __|
+  | |\  | (_) | (_| |  __/\__ \ (_| |  _|  |  _| (_) \__ \
+  |_| \_|\___/ \__,_|\___||___/\__,_|_|    |_|  \___/|___/
+
+"""
+
+VERSION = "1.6.0"
+
+
+def show_banner() -> None:
+    """Display the PEM banner."""
+    console.print(BANNER, style="green")
+    console.print(f"  [bold]PEM[/bold] v{VERSION}")
+    console.print("  [dim]Python Execution Manager[/dim]\n")
 
 
 class ScheduleTypeEnum(StrEnum):
@@ -72,8 +99,9 @@ app.add_typer(service_app)
 
 @app.callback()
 async def main() -> None:
-    """Initialize the database."""
+    """Initialize the database and show banner."""
     configure_logging()
+    show_banner()
     await create_db_and_tables()
 
 
@@ -124,7 +152,8 @@ async def add_job(
             raise typer.Exit(1)
 
         job = Job(
-            name=name or Faker().first_name(),
+            name=name
+            or f"{random.choice(['task', 'job', 'runner', 'worker', 'script', 'automation', 'job'])}{random.randint(1, 999)}",
             job_type="script" if is_script else "project",
             path=path,
             dependencies=dependencies,

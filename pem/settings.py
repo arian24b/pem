@@ -55,36 +55,21 @@ def _get_auto_config() -> dict[str, Any]:
 
 def _get_auto_processes() -> int:
     """Get optimal number of concurrent processes."""
-    try:
-        from psutil import cpu_count
-
-        cpu_count_number = cpu_count(logical=False) or 2
-    except ImportError:
-        cpu_count_number = 2
+    cpu_count_number = os.cpu_count() or 2
 
     return int(_get_env_setting("PEM_MAX_PROCESSES", min(max(2, cpu_count_number), 8)))
 
 
 def _get_auto_cache_size() -> int:
     """Get optimal cache size based on available memory."""
-    try:
-        from psutil import virtual_memory
-
-        memory_gb = virtual_memory().total / (1024**3)
-    except ImportError:
-        memory_gb = 4.0
+    memory_gb = 4.0  # Default fallback
 
     return int(_get_env_setting("PEM_CACHE_SIZE", min(int(memory_gb * 16000), 128000)))
 
 
 def _get_auto_pool_size() -> int:
     """Get optimal database pool size."""
-    try:
-        from psutil import cpu_count
-
-        cpu_count_number = cpu_count(logical=False) or 2
-    except ImportError:
-        cpu_count_number = 2
+    cpu_count_number = os.cpu_count() or 2
 
     return int(_get_env_setting("PEM_POOL_SIZE", min(max(10, cpu_count_number * 2), 50)))
 

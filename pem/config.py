@@ -66,12 +66,7 @@ class PEMConfig(BaseModel):
         if self.logs_directory:
             logs_path = Path(self.logs_directory).expanduser().resolve()
         else:
-            try:
-                from platformdirs import user_log_dir
-
-                logs_path = Path(user_log_dir("pem"))
-            except ImportError:
-                logs_path = Path.home() / ".local" / "state" / "pem" / "logs"
+            logs_path = Path.home() / ".local" / "state" / "pem" / "logs"
         logs_path.mkdir(parents=True, exist_ok=True)
         self._cached_logs_dir = logs_path
         return logs_path
@@ -85,12 +80,7 @@ class PEMConfig(BaseModel):
         if config_path := os.getenv("PEM_CONFIG_DIR"):
             config_dir = Path(config_path)
         else:
-            try:
-                from platformdirs import user_config_dir
-
-                config_dir = Path(user_config_dir("pem"))
-            except ImportError:
-                config_dir = Path.home() / ".config" / "pem"
+            config_dir = Path.home() / ".config" / "pem"
 
         config_dir.mkdir(parents=True, exist_ok=True)
         self._cached_config_dir = config_dir

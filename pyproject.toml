@@ -7,7 +7,7 @@ license = {file = "LICENSE"}
 keywords = ["python", "scheduler", "automation", "devops", "task-runner", "cron", "execution", "management", "scripts", "projects", "cli", "background-jobs", "logging", "dependencies"]
 authors = [{name = "Arian Omrani", email = "arian24b@gmail.com"}]
 maintainers = [{name = "Arian Omrani", email = "arian24b@gmail.com"}]
-requires-python = ">=3.13"
+requires-python = ">=3.10"
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
@@ -24,14 +24,9 @@ classifiers = [
     "Typing :: Typed",
 ]
 dependencies = [
-    "aiosqlite>=0.22.1",
     "apscheduler>=3.11.2",
-    "faker>=40.4.0",
-    "greenlet>=3.3.1",
-    "platformdirs>=4.7.1",
-    "psutil>=7.2.2",
     "pydantic>=2.12.5",
-    "sqlalchemy>=2.0.46",
+    "rich>=13.0.0",
     "typer>=0.23.1",
 ]
 

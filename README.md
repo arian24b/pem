@@ -559,6 +559,16 @@ MIT License - see [LICENSE](LICENSE) file for details.
 
 ---
 
+## Related Projects
+
+Explore other CLI tools by Arian Omrani:
+
+- **[LinkCovery](https://github.com/arian24b/linkcovery)** - Modern bookmark management CLI tool
+- **[OllamaTools](https://github.com/arian24b/ollamatools)** - CLI tool for managing Ollama models
+- **[ThroneTools](https://github.com/arian24b/thronetools)** - Cross-platform installer and management CLI for Throne
+
+---
+
 **Made with ❤️ by [Arian Omrani](https://github.com/arian24b)**
 
 *PEM - Schedule and execute Python scripts and projects with ease* 🐍✨
