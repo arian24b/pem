@@ -1,601 +1,105 @@
-# PEM - Python Execution Manager 🚀
+# PEM: Python Execution Manager
 
-**A powerful, modern CLI tool for managing, scheduling, and executing Python scripts and projects with ease.**
+[فارسی](README.fa.md)
 
-[![Python 3.13+](https://img.shields.io/badge/python-3.13+-blue.svg)](https://www.python.org/downloads/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Built with uv](https://img.shields.io/badge/built%20with-uv-blue)](https://github.com/astral-sh/uv)
+PEM keeps a list of Python scripts and projects, runs them on demand or on a schedule, and writes a log for every run. Each job runs in its own `uv`-managed environment, so a script can list its own dependencies. State lives in a local SQLite database.
 
-## ✨ What is PEM?
+## Install
 
-PEM (Python Execution Manager) is your comprehensive solution for managing Python script and project execution. Whether you need to run scripts on-demand, schedule automated tasks, or manage complex Python workflows, PEM provides an intuitive CLI interface with powerful scheduling capabilities.
-
-### 🎯 Perfect for:
-- **Data Scientists** scheduling ETL pipelines and analysis scripts
-- **DevOps Engineers** automating deployment and maintenance tasks
-- **Python Developers** managing multiple projects and scripts
-- **System Administrators** running scheduled monitoring and backup tasks
-- **Anyone** who needs reliable Python execution with proper logging and scheduling
-
-## 🌟 Key Features
-
-### 📋 **Unified Job Management**
-- **Two Job Types**: Handle both standalone Python scripts and full projects
-- **Smart Auto-execution**: Automatically run jobs after creation (configurable)
-- **Dependency Management**: Specify Python dependencies for script-type jobs
-- **Enable/Disable Control**: Easy job activation and deactivation
-
-### ⏰ **Flexible Scheduling System**
-- **Multiple Schedule Types**:
-  - `once` - Execute at a specific date/time
-  - `interval` - Run every X seconds/minutes/hours/days
-  - `cron` - Use cron-style expressions for complex schedules
-  - `until_done` - Retry until successful execution
-- **Unified Execution**: Single `run` command for immediate + optional scheduling
-- **Background Processing**: All scheduled jobs run automatically in the background
-
-### 📊 **Comprehensive Monitoring & Logging**
-- **Detailed Execution Logs**: Every run logged with timestamps, status, and output
-- **Real-time Status**: View system overview with job counts and schedules
-- **SQLite Database**: Persistent local storage for all jobs and execution history
-- **Rich CLI Output**: Color-coded feedback with emojis for better UX
-
-### 🛠 **Developer-Friendly Interface**
-- **Intuitive Commands**: Simple, memorable command structure
-- **Type-safe CLI**: Built with modern Typer framework
-- **Clean Help Output**: No clutter - only essential information shown
-- **Actionable Error Messages**: Clear guidance when things go wrong
-
-## 🚀 Quick Start
-
-### Installation Options
-
-#### Option 1: Using UV (Recommended)
-```bash
-# Install UV if you haven't already
-curl -LsSf https://astral.sh/uv/install.sh | sh
-
-# Install PEM from PyPI
-uv tool install pemexe
-
-# Or install from source
-git clone https://github.com/yourusername/pem.git
-cd pem
-uv sync
-uv run pem --help
-```
-
-#### Option 2: Using pip
-```bash
-pip install pemexe
-```
-
-### 🧩 Self Install + Service (Recommended)
-PEM can install itself and register a background service so schedules run continuously.
+Python 3.12 to 3.15 and [uv](https://docs.astral.sh/uv/).
 
 ```bash
-# Install pem + uv (if missing) and start the service
-pem install
-
-# Check service status
+uv tool install pemexe        # or: pipx install pemexe
+pem install                   # make sure pem and uv are present, install and start the background service
 pem service status
-
-# Update pem and uv later
-pem update
 ```
 
-**Service details**
-- macOS: launchd user agent (`~/Library/LaunchAgents/com.pem.daemon.plist`)
-- Linux: systemd user service (`~/.config/systemd/user/pem.service`)
-- Service runs: `python -m pem.cli daemon`
+The PyPI package is `pemexe`; the command is `pem`. From a clone: `uv sync && uv run pem --help`.
 
-#### Option 3: Download Binary
+## Quick start
+
 ```bash
-# Download the latest binary from releases
-wget https://github.com/yourusername/pem/releases/latest/download/pem
-chmod +x pem
-sudo mv pem /usr/local/bin/
+pem add --path ./my_script.py --script --name data-processor      # create the job and run it once
+pem add --path ./my_project --name web-app --no-auto-run          # create without running
+pem run --name data-processor                                     # run now
+pem run --name data-processor --schedule --type interval --minutes 60
+pem show                                                          # all jobs
+pem status                                                        # counts and next runs
 ```
 
-### Development Setup
+## Commands
+
+| Command | What it does |
+|---|---|
+| `add -p PATH [-n NAME] [-s] [-w DEP]... [-v PY] [--disabled] [--no-auto-run]` | create a job from a script (`-s`) or a project directory |
+| `show [-n NAME] [-i ID]` (alias `jobs`) | list jobs, or one job |
+| `edit [-n NAME] [-i ID] [-p PATH] [-s/--project] [-w DEP]... [-v PY] [-e/--disabled]` | change a job |
+| `delete [-n NAME] [-i ID]` | remove a job |
+| `run [-n NAME] [-i ID] [-s] [-t TYPE] [-m MINUTES]` | run now, optionally schedule it too |
+| `cron [-n NAME] [-i ID] [-t TYPE] ...` (alias `schedule`) | schedule a job |
+| `crons` (alias `schedules`) | list scheduled jobs |
+| `cancel -s SCHEDULER_ID` | cancel a schedule (the ID comes from `crons`) |
+| `status` | job counts, schedules and next runs |
+| `daemon` | run the scheduler in the foreground |
+| `install` | install pem and uv if missing, then set up and start the service |
+| `update-uv` | update the `uv` tool |
+| `service install\|uninstall\|start\|stop\|restart\|status` | manage the background service |
+| `config show\|get\|set\|reset\|path\|validate\|edit` | manage settings |
+
+Job commands take `--name` or `--id`. If you give neither, pem asks for the name. `add` asks for `--path` when it is missing. Repeat `-w` for several dependencies: `-w pandas -w requests`.
+
+> The job editor used to be `pem update`, which was hidden behind the self-update command. It is now `pem edit`, and `pem update` updates pem itself.
+
+### Schedule types for `cron`
+
+| `--type` | Options |
+|---|---|
+| `once` (default) | `--date 2026-01-01T10:00:00` |
+| `interval` | `--seconds`, `--minutes`, `--hours`, `--days` |
+| `cron` | `--cron-minute`, `--cron-hour`, `--cron-day`, `--cron-month`, `--cron-dow` |
+| `until_done` | `--max-retries N`, `--retry-interval SECONDS` |
 
 ```bash
-# Clone the repository
-git clone https://github.com/yourusername/pem.git
-cd pem
-
-# Install development dependencies
-make dev-install
-# or manually:
-uv sync --group dev --group build --group release
-
-# Run tests
-make test
-
-# Build the project
-make build
-
-# Build standalone binary
-make binary
-```
-
-### Installation
-```bash
-# If using in your project
-uv add pemexe
-# OR
-pip install pemexe
-
-# If using as tool
-uvx --from pemexe pem
-```
-
-
-```bash
-# Clone and install locally
-git clone https://github.com/arian24b/pem.git
-cd pem
-uv sync
-
-# Or install from source
-pip install -e .
-```
-
-### Basic Usage
-
-```bash
-# Add and run a Python script immediately
-pem add --path ./my_script.py --script --name "data-processor"
-
-# Add a project without auto-execution
-pem add --path ./my_project --name "web-app" --no-auto-run
-
-# Execute an existing job
-pem run --name "data-processor"
-
-# Execute and schedule for hourly runs
-pem run --name "data-processor" --schedule --type interval --minutes 60
-
-# View all jobs
-pem show
-
-# Check system status
-pem status
-```
-
-## 📖 Command Reference
-
-### Job Management Commands
-
-#### `pem add` - Create New Jobs
-Create a new job to execute Python scripts or projects.
-
-```bash
-# Add a simple script with dependencies
-pem add --path ./script.py --script --name "analyzer" --with pandas requests
-
-# Add a project (uses existing environment)
-pem add --path ./my_project --name "web-server"
-
-# Add disabled job (no auto-execution)
-pem add --path ./script.py --script --disabled --no-auto-run
-
-# Add with specific Python version
-pem add --path ./script.py --script --python 3.11 --with numpy
-```
-
-**Key Options:**
-- `--path`, `-p`: Path to Python script or project directory *(required)*
-- `--name`, `-n`: Unique job name (auto-generated if not provided)
-- `--script`, `-s`: Treat as single Python script (vs. project)
-- `--with`, `-w`: Python dependencies to install (scripts only)
-- `--python`, `-v`: Required Python version (scripts only)
-- `--enabled/--disabled`, `-e`: Enable/disable job execution
-- `--auto-run/--no-auto-run`: Execute immediately after creation
-
-#### `pem show` - Display Job Information
-Display details of jobs (all jobs if no filter specified).
-
-**Aliases:** `pem jobs`
-
-```bash
-# Show all jobs
-pem show
-
-# Show specific job by name
-pem show --name "data-processor"
-
-# Show specific job by ID
-pem show --id 1
-```
-
-#### `pem edit` - Modify Existing Jobs
-Update properties of an existing job.
-
-```bash
-# Enable a disabled job
-pem edit --name "data-processor" --enabled
-
-# Update job path
-pem edit --id 1 --path ./new_script.py
-
-# Change job type and dependencies
-pem edit --name "analyzer" --script --with pandas numpy matplotlib
-```
-
-#### `pem delete` - Remove Jobs
-Remove a job permanently from the system.
-
-```bash
-# Delete by name
-pem delete --name "old-job"
-
-# Delete by ID
-pem delete --id 1
-```
-
-### Execution Commands
-
-#### `pem run` - Execute Jobs (Immediate + Optional Scheduling)
-Execute a job immediately, with optional recurring schedule setup.
-
-```bash
-# Execute job immediately
-pem run --name "data-processor"
-
-# Execute and set up hourly schedule
-pem run --name "monitor" --schedule --type interval --minutes 60
-
-# Execute by ID with daily schedule
-pem run --id 1 --schedule --type interval --minutes 1440
-```
-
-**Key Options:**
-- `--id`, `-i`: ID of job to execute
-- `--name`, `-n`: Name of job to execute
-- `--schedule/--no-schedule`, `-s`: Set up recurring schedule
-- `--type`, `-t`: Schedule type (interval, once, cron, until_done)
-- `--minutes`, `-m`: Interval in minutes (for interval scheduling)
-
-### Scheduling Commands
-
-#### `pem cron` - Advanced Job Scheduling
-Schedule a job for automatic execution using various timing options.
-
-**Aliases:** `pem schedule`
-
-```bash
-# Schedule every 30 minutes
-pem cron --name "monitor" --type interval --minutes 30
-
-# Schedule daily at 9 AM using cron
-pem cron --name "report" --type cron --cron-hour 9 --cron-minute 0
-
-# Schedule one-time execution
-pem cron --name "backup" --type once --date "2024-12-31T23:59:59"
-
-# Retry until success
-pem cron --name "flaky-job" --type until_done --max-retries 5 --retry-interval 300
-```
-
-**Schedule Types:**
-- **interval**: `--seconds`, `--minutes`, `--hours`, `--days`
-- **once**: `--date` (ISO format: 2024-01-01T10:00:00)
-- **cron**: `--cron-minute`, `--cron-hour`, `--cron-day`, `--cron-month`, `--cron-dow`
-- **until_done**: `--max-retries`, `--retry-interval`
-
-#### `pem crons` - List Scheduled Jobs
-List all jobs currently scheduled for automatic execution.
-
-**Aliases:** `pem schedules`
-
-```bash
+pem cron --name monitor --type interval --minutes 30
+pem cron --name report  --type cron --cron-hour 9 --cron-minute 0
+pem cron --name backup  --type once --date 2026-12-31T23:59:59
+pem cron --name flaky   --type until_done --max-retries 5 --retry-interval 300
 pem crons
+pem cancel --scheduler-id pem_job_interval_1_20261201_120000
 ```
 
-#### `pem cancel` - Cancel Scheduled Jobs
-Cancel a scheduled job by its scheduler ID.
-
-```bash
-# Cancel specific scheduled job (use ID from 'pem crons')
-pem cancel --scheduler-id "pem_job_interval_1_20241201_120000"
-```
-
-### System Commands
-
-#### `pem status` - System Overview
-Display system overview with job counts and scheduling statistics.
-
-```bash
-pem status
-```
-
-Shows:
-- Total jobs (enabled/disabled, scripts/projects)
-- Active scheduled jobs with next run times
-- System health at a glance
-
-## 🏗 Architecture & Design
-
-PEM is built with modern Python technologies:
-
-- **AsyncTyper**: Custom async CLI framework extending Typer
-- **SQLAlchemy**: Robust async database ORM for data persistence
-- **APScheduler**: Reliable background job scheduling
-- **Faker**: Automatic job name generation
-- **AsyncIO**: Efficient asynchronous execution throughout
-
-### Database Schema
-- **Jobs Table**: Stores job definitions, paths, dependencies, and settings
-- **Execution History**: Tracks all job runs with status, logs, and timing
-- **Schedule Tracking**: Manages active schedules and their configurations
-
-## 🔧 Configuration & Setup
-
-PEM works out of the box with minimal configuration:
-
-- **Database**: SQLite (`pem.db`) in working directory
-- **Logs**: Stored in OS-specific log directory with rotation (see below)
-- **Auto-initialization**: Database and tables created automatically
-- **Environment Isolation**: Uses proper Python environment handling
-
-## 📁 Project Structure
-
-```
-pem/
-├── pem/
-│   ├── cli.py              # Main CLI interface with all commands
-│   ├── settings.py         # Configuration and settings
-│   ├── core/
-│   │   ├── executor.py     # Job execution engine
-│   │   └── scheduler.py    # Background scheduling manager
-│   └── db/
-│       ├── database.py     # Database configuration & sessions
-│       └── models.py       # SQLAlchemy data models
-├── logs/                   # Execution logs directory (legacy)
-├── pem.db                 # SQLite database file
-└── pyproject.toml         # Project configuration with uv
-```
-
-## � Common Workflows
-
-### 1. Quick Script Development & Testing
-```bash
-# Add and test a script immediately
-pem add --path ./analysis.py --script --name "analysis" --with pandas
-
-# Iterate and re-run during development
-pem run --name "analysis"
-```
-
-### 2. Production Data Pipeline Setup
-```bash
-# Add ETL script
-pem add --path ./etl_pipeline.py --script --name "daily-etl" --no-auto-run
-
-# Schedule for daily execution at 2 AM
-pem cron --name "daily-etl" --type cron --cron-hour 2 --cron-minute 0
-
-# Monitor scheduled jobs
-pem crons
-pem status
-```
-
-### 3. System Monitoring Setup
-```bash
-# Add monitoring script
-pem add --path ./health_check.py --script --name "health-monitor" --no-auto-run
-
-# Set up 5-minute monitoring
-pem cron --name "health-monitor" --type interval --minutes 5
-
-# Check system status
-pem status
-```
-
-### 4. Project Management
-```bash
-# Add a Python project
-pem add --path ./my_fastapi_app --name "api-server" --no-auto-run
-
-# Run when needed
-pem run --name "api-server"
-
-# Update project path as it evolves
-pem edit --name "api-server" --path ./updated_fastapi_app
-```
-
-## 🛠 Development & Contributing
-
-### Development Workflow
-
-This project uses **UV** for modern Python package management and follows best practices for professional Python development.
-
-#### Quick Development Commands
-```bash
-# Install all dependencies (dev, build, release)
-make dev-install
-
-# Run code quality checks
-make lint
-
-# Format code
-make format
-
-# Run tests with coverage
-make test
-
-# Build Python package
-make build
-
-# Build standalone binary
-make binary
-
-# Full release process
-make release
-```
-
-#### Manual UV Commands
-```bash
-# Install project and dependencies
-uv sync
-
-# Install specific dependency groups
-uv sync --group dev          # Development tools
-uv sync --group build        # Build tools
-uv sync --group release      # Release tools
-
-# Run commands in the UV environment
-uv run pem --help           # Run PEM
-uv run pytest              # Run tests
-uv run ruff check pem/      # Lint code
-uv run mypy pem/            # Type check
-
-# Build and publish
-uv build                    # Build wheel and source dist
-uv publish --token $TOKEN   # Publish to PyPI
-```
-
-## 🧾 Logs & Rotation
-
-PEM writes logs to your OS-specific log directory and rotates them automatically.
-
-Default log paths:
-- macOS: `~/Library/Logs/pem/`
-- Linux: `~/.local/state/pem/logs/`
-
-Rotation defaults:
-- Max size: 10 MB
-- Backups kept: 5
-
-You can override these in `pem config`.
-
-#### Project Structure
-```
-pem/
-├── pem/                    # Main package
-│   ├── cli.py             # CLI interface
-│   ├── settings.py        # Configuration
-│   ├── core/              # Core scheduling logic
-│   └── db/                # Database models
-├── scripts/               # Build and release scripts
-│   ├── build_binary.py    # PyInstaller automation
-│   └── release.py         # Release automation
-├── pyproject.toml         # Project configuration
-├── uv.toml                # UV configuration
-├── uv.lock                # Dependency lock file
-└── Makefile               # Development shortcuts
-```
-
-#### Release Process
-
-```bash
-# Option 1: Automated release
-python scripts/release.py
-
-# Option 2: Manual steps
-make lint test              # Quality checks
-make build                  # Build package
-make binary                 # Build binary
-uv publish --token $TOKEN   # Publish to PyPI
-```
-
-#### Configuration Files
-
-- **pyproject.toml**: Main project configuration with modern PEP 518/621 standards
-- **uv.toml**: UV-specific settings for dependency resolution and publishing
-- **uv.lock**: Reproducible dependency versions
-- **Makefile**: Development shortcuts and common commands
-
-## 🆚 Why Choose PEM?
-
-### vs. Cron/Task Scheduler
-- ✅ **Cross-platform**: Works identically on Windows, macOS, and Linux
-- ✅ **Python-native**: No shell scripting required
-- ✅ **Dependency management**: Built-in package handling
-- ✅ **Rich logging**: Detailed execution history and status tracking
-- ✅ **User-friendly**: Modern CLI with helpful error messages
-
-### vs. Other Python Task Runners
-- ✅ **Zero configuration**: Works immediately without complex setup files
-- ✅ **Local storage**: No external databases or services required
-- ✅ **Unified interface**: Single tool for all execution needs
-- ✅ **Flexible scheduling**: Multiple timing patterns in one tool
-- ✅ **Developer UX**: Intuitive commands with excellent error handling
-
-### vs. Manual Script Management
-- ✅ **Automated scheduling**: Set-and-forget execution
-- ✅ **Centralized management**: All scripts in one place
-- ✅ **Execution tracking**: History, logs, and status monitoring
-- ✅ **Error handling**: Retry mechanisms and failure notifications
-- ✅ **Environment isolation**: Proper dependency and version management
-
-## 🤝 Contributing
-
-We welcome contributions! To get started:
-
-1. **Fork the repository**
-2. **Create a feature branch**: `git checkout -b feature/amazing-feature`
-3. **Make your changes** with tests
-4. **Run the test suite**: `pytest`
-5. **Submit a pull request**
-
-### Development Setup
-```bash
-git clone https://github.com/arian24b/pem.git
-cd pem
-uv sync
-```
-
-## 📝 License
-
-MIT License - see [LICENSE](LICENSE) file for details.
-
-## 🙋‍♀️ Support & Community
-
-- **Issues**: [GitHub Issues](https://github.com/arian24b/pem/issues)
-- **Feature Requests**: [GitHub Discussions](https://github.com/arian24b/pem/discussions)
-- **Documentation**: See the comprehensive [Tool Overview](PEM_TOOL_OVERVIEW.md)
-
----
-
-**Made with ❤️ by [Arian Omrani](https://github.com/arian24b)**
-
-*PEM - Schedule and execute Python scripts and projects with ease* 🐍✨
-#### `pem install` - Self Install + Service
-Installs PEM (pip), ensures uv, and configures the background service.
-
-```bash
-pem install
-```
-
-#### `pem update` - Self Update
-Updates PEM and uv.
-
-```bash
-pem update
-```
-
-#### `pem service` - Service Management
-Manage the background service.
-
-```bash
-pem service status
-pem service start
-pem service stop
-pem service restart
-pem service uninstall
-```
+## Configuration and files
+
+- Settings: `pem config show`, `pem config set KEY VALUE` (values like `true`, `5`, `a,b`, `none` are converted), `pem config path`. `pem config reset` asks for confirmation; in scripts pass `--yes`.
+- Database: SQLite (`pem.db`). Tables are created on first use.
+- Logs: one file per run in the OS log directory, rotated by size.
 
 ## Common commands
 
-Built with [cfui](https://github.com/arian24b/cfui), so every command shares the same look and flags:
+Built on [cfuicli](https://github.com/arian24b/cfui), so it looks and behaves like the other tools in this family.
 
 ```bash
-pem help [command]     # help
-pem version            # version and git repo (also: pem -v)
-pem update [--check]   # self update
-pem -q ...             # quiet: no banners/notes (or PEM_QUIET=1)
+pem help [command]     # help; -h works on any command
+pem version            # version and git repository (also: -v)
+pem update [--check]   # update the tool itself; --check only compares versions
+pem -q ...             # quiet: no banner or notes (or PEM_QUIET=1)
 ```
 
-Missing required options are asked for interactively on a TTY; in pipes/CI they fail with `--flag is required`.
+- A missing required option is asked for when you run the tool in a terminal. In a pipe or in CI it stops with `--flag is required. Pass --flag <value> or run interactively.` (exit code 2).
+- Errors appear in a red box on stderr with a non-zero exit code. Ctrl-C exits with 130.
+- Color is used only on a terminal. `NO_COLOR=1` turns it off.
+- `pem update` updates pem itself; `pem update-uv` updates uv.
+
+## Development
+
+```bash
+uv sync
+uv run ruff check . && uv run ruff format --check .
+uv build
+```
+
+Commits follow Conventional Commits. See the `Makefile` for shortcuts and `scripts/` for the release and binary builds.
+
+## License
+
+MIT
