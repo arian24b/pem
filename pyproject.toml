@@ -32,11 +32,8 @@ dependencies = [
     "psutil>=7.2.2",
     "pydantic>=2.12.5",
     "sqlalchemy>=2.0.46",
-    "cfuicli>=0.2.0",
+    "cfuicli>=1.0.0",
 ]
-
-[tool.uv.sources]
-cfuicli = { path = "../cfui", editable = true }  # drop once cfui is on PyPI
 
 [project.scripts]
 pem = "pem.cli:run"
