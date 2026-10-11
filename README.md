@@ -72,7 +72,7 @@ pem cancel --scheduler-id pem_job_interval_1_20261201_120000
 
 - Settings: `pem config show`, `pem config set KEY VALUE` (values like `true`, `5`, `a,b`, `none` are converted), `pem config path`. `pem config reset` asks for confirmation; in scripts pass `--yes`.
 - Database: SQLite (`pem.db`). Tables are created on first use.
-- Logs: one file per run in the OS log directory, rotated by size.
+- Logs: one file per run, rotated by size (10 MB, 5 backups by default; change them with `pem config set`). macOS: `~/Library/Logs/pem/`. Linux: `~/.local/state/pem/logs/`.
 
 ## Common commands
 
