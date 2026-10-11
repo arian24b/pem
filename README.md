@@ -209,18 +209,18 @@ pem show --name "data-processor"
 pem show --id 1
 ```
 
-#### `pem update` - Modify Existing Jobs
+#### `pem edit` - Modify Existing Jobs
 Update properties of an existing job.
 
 ```bash
 # Enable a disabled job
-pem update --name "data-processor" --enabled
+pem edit --name "data-processor" --enabled
 
 # Update job path
-pem update --id 1 --path ./new_script.py
+pem edit --id 1 --path ./new_script.py
 
 # Change job type and dependencies
-pem update --name "analyzer" --script --with pandas numpy matplotlib
+pem edit --name "analyzer" --script --with pandas numpy matplotlib
 ```
 
 #### `pem delete` - Remove Jobs
@@ -402,7 +402,7 @@ pem add --path ./my_fastapi_app --name "api-server" --no-auto-run
 pem run --name "api-server"
 
 # Update project path as it evolves
-pem update --name "api-server" --path ./updated_fastapi_app
+pem edit --name "api-server" --path ./updated_fastapi_app
 ```
 
 ## 🛠 Development & Contributing
@@ -586,3 +586,16 @@ pem service stop
 pem service restart
 pem service uninstall
 ```
+
+## Common commands
+
+Built with [cfui](https://github.com/arian24b/cfui), so every command shares the same look and flags:
+
+```bash
+pem help [command]     # help
+pem version            # version and git repo (also: pem -v)
+pem update [--check]   # self update
+pem -q ...             # quiet: no banners/notes (or PEM_QUIET=1)
+```
+
+Missing required options are asked for interactively on a TTY; in pipes/CI they fail with `--flag is required`.

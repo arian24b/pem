@@ -1,16 +1,15 @@
-import asyncio
 import inspect
 import signal
 import threading
 import time
 from enum import StrEnum
-from functools import partial, wraps
-from typing import Annotated
 
-import typer
+from cfui import App, Arg, Fail, ui
 from faker import Faker
 from sqlalchemy.future import select
 
+from pem.commands.config import register as register_config
+from pem.commands.service import register as register_service
 from pem.core.executor import Executor
 from pem.core.scheduler import scheduler_manager
 from pem.db.database import SessionLocal, create_db_and_tables
@@ -34,95 +33,103 @@ class ScheduleTypeEnum(StrEnum):
     until_done = "until_done"
 
 
-class AsyncTyper(typer.Typer):
-    @staticmethod
-    def maybe_run_async(decorator, f):
-        if inspect.iscoroutinefunction(f):
-
-            @wraps(f)
-            def runner(*args, **kwargs):
-                return asyncio.run(f(*args, **kwargs))
-
-            decorator(runner)
-        else:
-            decorator(f)
-        return f
-
-    def callback(self, *args, **kwargs):
-        decorator = super().callback(*args, **kwargs)
-        return partial(self.maybe_run_async, decorator)
-
-    def command(self, *args, **kwargs):
-        decorator = super().command(*args, **kwargs)
-        return partial(self.maybe_run_async, decorator)
-
-
-app = AsyncTyper(
-    help="Python Execution Manager - Schedule and execute Python scripts and projects with ease",
-    no_args_is_help=True,
+app = App(
+    "pem",
+    repo="https://github.com/arian24b/pem",
+    pypi="pemexe",
+    description="Python Execution Manager - Schedule and execute Python scripts and projects with ease",
 )
-
-# Add config subcommand
-from pem.commands.config import config_app
-from pem.commands.service import service_app
-
-app.add_typer(config_app)
-app.add_typer(service_app)
+register_config(app)
+register_service(app)
 
 
-@app.callback()
-async def main() -> None:
-    """Initialize the database."""
-    configure_logging()
-    await create_db_and_tables()
+def command(name, help, args=(), db=True, **kw):  # noqa: A002
+    """Register `fn(**options)` (options taken from the namespace by name); db=True inits the database."""
+
+    def deco(fn):
+        params = list(inspect.signature(fn).parameters)
+
+        async def runner(a):
+            if db:
+                configure_logging()
+                await create_db_and_tables()
+            r = fn(**{k: getattr(a, k) for k in params})
+            if inspect.isawaitable(r):
+                await r
+
+        app.command(name, help, args=args, **kw)(runner)
+        return fn
+
+    return deco
 
 
-@app.command(name="add", help="Create a new job to execute Python scripts or projects.", no_args_is_help=True)
-async def add_job(
-    path: Annotated[
-        str,
-        typer.Option("--path", "-p", help="Path to Python script file or project directory.", show_default=False),
-    ] = "",
-    name: Annotated[
-        str | None,
-        typer.Option(
-            "--name",
-            "-n",
-            help="Unique name for the job (auto-generated if not provided).",
-            show_default=False,
+ID = Arg("-i", "--id", dest="job_id", type=int, help="Job ID")
+NAME = Arg("-n", "--name", help="Job name")
+
+
+async def find_job(session, job_id, name, verb):
+    """Look a job up by --id or --name; ask for the name when neither was given."""
+    if not job_id and not name:
+        name = ui.need(None, "--name", f"Name of the job to {verb}")
+    job = await session.get(Job, job_id) if job_id else await session.scalar(select(Job).filter_by(name=name))
+    if job is None:
+        raise Fail(f"Job with ID/Name '{job_id or name}' not found.", "Use `pem show` to list jobs.")
+    return job
+
+
+def report_result(result) -> None:
+    ui.out(f"status:    {result['status']}\nexit code: {result['exit_code']}\nlog file:  {result['log_path']}")
+    if result["status"] == "FAILED":
+        ui.warning("Job execution failed. Check the log file for details.")
+    else:
+        ui.success("Job executed successfully.")
+
+
+@command(
+    "add",
+    "Create a new job to execute Python scripts or projects",
+    args=[
+        Arg(
+            "-p",
+            "--path",
+            dest="path",
+            required=True,
+            prompt="Path to a Python script or project directory",
+            help="Path to Python script file or project directory",
         ),
-    ] = None,
-    is_script: Annotated[
-        bool,
-        typer.Option("--script", "-s", help="Treat as single Python script (default: project).", show_default=False),
-    ] = False,
-    dependencies: Annotated[
-        list[str] | None,
-        typer.Option("--with", "-w", help="Python dependencies to install (for scripts only).", show_default=False),
-    ] = None,
-    python_version: Annotated[
-        float | None,
-        typer.Option("--python", "-v", help="Required Python version (for scripts only).", show_default=False),
-    ] = None,
-    is_enabled: Annotated[
-        bool,
-        typer.Option("--enabled/--disabled", "-e", help="Enable job for execution.", show_default=False),
-    ] = True,
-    auto_run: Annotated[
-        bool,
-        typer.Option(
-            "--auto-run/--no-auto-run",
-            help="Execute immediately after creation (if enabled).",
-            show_default=False,
+        Arg("-n", "--name", help="Unique name for the job (auto-generated if not provided)"),
+        Arg(
+            "-s",
+            "--script",
+            dest="is_script",
+            action="store_true",
+            help="Treat as single Python script (default: project)",
         ),
-    ] = True,
-) -> None:
+        Arg("-w", "--with", dest="dependencies", action="append", help="Python dependencies to install (scripts only)"),
+        Arg("-v", "--python", dest="python_version", type=float, help="Required Python version (scripts only)"),
+        Arg(
+            "-e",
+            "--enabled",
+            dest="is_enabled",
+            action="store_const",
+            const=True,
+            default=True,
+            help="Enable job for execution (default)",
+        ),
+        Arg("--disabled", dest="is_enabled", action="store_const", const=False, help="Create the job disabled"),
+        Arg(
+            "--auto-run",
+            dest="auto_run",
+            action="store_const",
+            const=True,
+            default=True,
+            help="Execute immediately after creation (default)",
+        ),
+        Arg("--no-auto-run", dest="auto_run", action="store_const", const=False, help="Do not execute after creation"),
+    ],
+)
+async def add_job(path, name, is_script, dependencies, python_version, is_enabled, auto_run) -> None:
     async with SessionLocal() as session:
-        # Validate required path parameter
-        if not path:
-            typer.echo("❌ Error: Path is required. Use --path to specify the Python script or project directory.")
-            raise typer.Exit(1)
-
         job = Job(
             name=name or Faker().first_name(),
             job_type="script" if is_script else "project",
@@ -134,43 +141,22 @@ async def add_job(
         session.add(job)
         await session.commit()
         await session.refresh(job)
-        typer.echo(f"✅ Created job: {job.name}")
+        ui.success(f"Created job: {job.name}")
 
-        # If job is enabled and auto-run is requested, automatically execute it
         if job.is_enabled and auto_run:
-            typer.echo("🚀 Job is enabled. Executing immediately...")
+            ui.info("Job is enabled. Executing immediately...")
             try:
-                executor = Executor(job)
-                result = await executor.execute()
-
-                typer.echo(f"✅ Execution completed with status: {result['status']}")
-                typer.echo(f"   Exit code: {result['exit_code']}")
-                typer.echo(f"   Log file: {result['log_path']}")
-
-                if result["status"] == "FAILED":
-                    typer.echo("⚠️  Job execution failed. Check the log file for details.")
-                else:
-                    typer.echo("🎉 Job executed successfully!")
-
+                report_result(await Executor(job).execute())
             except Exception as e:
-                typer.echo(f"❌ Failed to execute job after creation: {e}")
-        elif job.is_enabled and not auto_run:
-            typer.echo("💡 Job is enabled but auto-run is disabled. Use 'pem run' to execute manually.")
+                ui.error(f"Failed to execute job after creation: {e}")
+        elif job.is_enabled:
+            ui.hint("Job is enabled but auto-run is disabled. Use 'pem run' to execute manually.")
         else:
-            typer.echo("💤 Job is disabled. Enable it with 'pem update' to allow execution.")
+            ui.hint("Job is disabled. Enable it with 'pem edit --enabled' to allow execution.")
 
 
-@app.command(name="show", help="Display details of jobs (all jobs if no filter specified).")
-async def show_jobs(
-    name: Annotated[
-        str | None,
-        typer.Option("--name", "-n", help="Show specific job by name.", show_default=False),
-    ] = None,
-    job_id: Annotated[
-        int | None,
-        typer.Option("--id", "-i", help="Show specific job by ID.", show_default=False),
-    ] = None,
-) -> None:
+@command("show", "Display details of jobs (all jobs if no filter specified)", args=[NAME, ID], aliases=("jobs",))
+async def show_jobs(name, job_id) -> None:
     async with SessionLocal() as session:
         if not job_id and not name:
             jobs = list((await session.execute(select(Job))).scalars().all())
@@ -182,68 +168,46 @@ async def show_jobs(
                 jobs.append(job)
 
         if jobs:
-            for job in jobs:
-                status_emoji = "🟢" if job.is_enabled else "🔴"
-                type_emoji = "📄" if job.job_type == "script" else "📁"
-                typer.echo(f"\n{status_emoji} {type_emoji} Job: {job.name}")
-                typer.echo(f"   ID: {job.id}")
-                typer.echo(f"   Type: {job.job_type}")
-                typer.echo(f"   Path: {job.path}")
-                typer.echo(f"   Status: {'Enabled' if job.is_enabled else 'Disabled'}")
-                if job.dependencies:
-                    typer.echo(f"   Dependencies: {', '.join(job.dependencies)}")
-                if job.python_version:
-                    typer.echo(f"   Python Version: {job.python_version}")
+            ui.table(
+                [
+                    (
+                        j.id,
+                        j.name,
+                        j.job_type,
+                        "enabled" if j.is_enabled else "disabled",
+                        j.path,
+                        ", ".join(j.dependencies or []),
+                        j.python_version or "",
+                    )
+                    for j in jobs
+                ],
+                ["ID", "Name", "Type", "Status", "Path", "Dependencies", "Python"],
+            )
         elif job_id or name:
-            typer.echo(f"❌ Job with ID/Name '{job_id or name}' not found.")
+            raise Fail(f"Job with ID/Name '{job_id or name}' not found.")
         else:
-            typer.echo("📭 No jobs found. Use 'pem add' to create your first job.")
+            ui.warning("No jobs found. Use 'pem add' to create your first job.")
 
 
-@app.command(name="update", help="Update properties of an existing job.")
-async def update_job(
-    job_id: Annotated[
-        int | None,
-        typer.Option("--id", "-i", help="ID of the job to update.", show_default=False),
-    ] = None,
-    name: Annotated[str | None, typer.Option("--name", "-n", help="New name for the job.", show_default=False)] = None,
-    path: Annotated[str | None, typer.Option("--path", "-p", help="New path for the job.", show_default=False)] = None,
-    is_script: Annotated[
-        bool | None,
-        typer.Option(
-            "--script/--project",
-            "-s",
-            help="Change job type to script or project.",
-            show_default=False,
-        ),
-    ] = None,
-    dependencies: Annotated[
-        list[str] | None,
-        typer.Option("--with", "-w", help="Update dependencies (scripts only).", show_default=False),
-    ] = None,
-    python_version: Annotated[
-        float | None,
-        typer.Option("--python", "-v", help="Update Python version requirement.", show_default=False),
-    ] = None,
-    is_enabled: Annotated[
-        bool | None,
-        typer.Option("--enabled/--disabled", "-e", help="Enable or disable the job.", show_default=False),
-    ] = None,
-) -> None:
+@command(
+    "edit",
+    "Update properties of an existing job",
+    args=[
+        ID,
+        NAME,
+        Arg("-p", "--path", help="New path for the job"),
+        Arg("-s", "--script", dest="is_script", action="store_const", const=True, help="Change job type to script"),
+        Arg("--project", dest="is_script", action="store_const", const=False, help="Change job type to project"),
+        Arg("-w", "--with", dest="dependencies", action="append", help="Update dependencies (scripts only)"),
+        Arg("-v", "--python", dest="python_version", type=float, help="Update Python version requirement"),
+        Arg("-e", "--enabled", dest="is_enabled", action="store_const", const=True, help="Enable the job"),
+        Arg("--disabled", dest="is_enabled", action="store_const", const=False, help="Disable the job"),
+    ],
+)
+async def edit_job(job_id, name, path, is_script, dependencies, python_version, is_enabled) -> None:
     async with SessionLocal() as session:
-        if not job_id and not name:
-            typer.echo("❌ You must provide either --id or --name to specify which job to update.")
-            return
-
-        if job_id:
-            job = await session.get(Job, job_id)
-        elif name:
-            job = await session.scalar(select(Job).filter_by(name=name))
-        else:
-            typer.echo(f"Job with ID/Name {job_id or name} not found.")
-            return
-
-        if name:
+        job = await find_job(session, job_id, None if job_id else name, "update")
+        if job_id and name:
             job.name = name
         if path:
             job.path = path
@@ -258,167 +222,115 @@ async def update_job(
 
         await session.commit()
         await session.refresh(job)
-        typer.echo(f"✅ Updated job: {job.id} - {job.name}")
+        ui.success(f"Updated job: {job.id} - {job.name}")
 
 
-@app.command(name="delete", help="Remove a job permanently from the system.")
-async def delete_job(
-    job_id: Annotated[
-        int | None,
-        typer.Option("--id", "-i", help="ID of the job to delete.", show_default=False),
-    ] = None,
-    name: Annotated[
-        str | None,
-        typer.Option("--name", "-n", help="Name of the job to delete.", show_default=False),
-    ] = None,
-) -> None:
+@command("delete", "Remove a job permanently from the system", args=[ID, NAME])
+async def delete_job(job_id, name) -> None:
     async with SessionLocal() as session:
-        if not job_id and not name:
-            typer.echo("❌ You must provide either --id or --name to specify which job to delete.")
-            return
-
-        if job_id:
-            job = await session.get(Job, job_id)
-        elif name:
-            job = await session.scalar(select(Job).filter_by(name=name))
-        else:
-            typer.echo(f"Job with ID/Name {job_id or name} not found.")
-            return
-
+        job = await find_job(session, job_id, name, "delete")
         await session.delete(job)
         await session.commit()
-        typer.echo(f"🗑️  Deleted job: {job.id} - {job.name}")
+        ui.success(f"Deleted job: {job.id} - {job.name}")
 
 
-@app.command(name="run", help="Execute a job immediately, with optional recurring schedule setup.")
-async def run_job(
-    job_id: Annotated[
-        int | None,
-        typer.Option("--id", "-i", help="ID of the job to execute.", show_default=False),
-    ] = None,
-    name: Annotated[
-        str | None,
-        typer.Option("--name", "-n", help="Name of the job to execute.", show_default=False),
-    ] = None,
-    schedule: Annotated[
-        bool,
-        typer.Option("--schedule/--no-schedule", "-s", help="Set up recurring execution schedule.", show_default=False),
-    ] = False,
-    schedule_type: Annotated[
-        ScheduleTypeEnum,
-        typer.Option("--type", "-t", help="Schedule type (for --schedule option).", show_default=False),
-    ] = ScheduleTypeEnum.interval,
-    minutes: Annotated[
-        int,
-        typer.Option("--minutes", "-m", help="Interval in minutes (for interval scheduling).", show_default=False),
-    ] = 60,
-) -> None:
-    """Execute a job immediately and optionally schedule it for future execution."""
+@command(
+    "run",
+    "Execute a job immediately, with optional recurring schedule setup",
+    args=[
+        ID,
+        NAME,
+        Arg("-s", "--schedule", action="store_true", help="Set up recurring execution schedule"),
+        Arg(
+            "-t",
+            "--type",
+            dest="schedule_type",
+            type=ScheduleTypeEnum,
+            choices=list(ScheduleTypeEnum),
+            default=ScheduleTypeEnum.interval,
+            help="Schedule type (for --schedule)",
+        ),
+        Arg("-m", "--minutes", type=int, default=60, help="Interval in minutes (for interval scheduling)"),
+    ],
+)
+async def run_job(job_id, name, schedule, schedule_type, minutes) -> None:
     async with SessionLocal() as session:
-        if not job_id and not name:
-            typer.echo("❌ You must provide either --id or --name to specify which job to execute.")
-            return
-
-        if job_id:
-            job = await session.get(Job, job_id)
-        elif name:
-            job = await session.scalar(select(Job).filter_by(name=name))
-        else:
-            typer.echo(f"❌ Job with ID/Name '{job_id or name}' not found.")
-            return
-
+        job = await find_job(session, job_id, name, "execute")
         if not job.is_enabled:
-            typer.echo(f"⚠️  Job '{job.name}' is disabled. Enable it first with 'pem update --enabled'.")
-            return
+            raise Fail(f"Job '{job.name}' is disabled.", "Enable it first with 'pem edit --enabled'.")
 
-        typer.echo(f"🚀 Executing job: {job.name}")
-        executor = Executor(job)
-        result = await executor.execute()
+        ui.info(f"Executing job: {job.name}")
+        report_result(await Executor(job).execute())
 
-        typer.echo(f"✅ Execution completed with status: {result['status']}")
-        typer.echo(f"   Exit code: {result['exit_code']}")
-        typer.echo(f"   Log file: {result['log_path']}")
-
-        if result["status"] == "FAILED":
-            typer.echo("⚠️  Job execution failed. Check the log file for details.")
-        else:
-            typer.echo("🎉 Job executed successfully!")
-
-        # Schedule if requested
         if schedule:
-            typer.echo("\n⏰ Setting up recurring schedule...")
-            await schedule_job(job_id=job_id, name=name, schedule_type=schedule_type, minutes=minutes)
+            ui.info("Setting up recurring schedule...")
+            await schedule_job(job_id=job.id, name=None, schedule_type=schedule_type, minutes=minutes)
 
 
-@app.command(name="cron", help="Schedule a job for automatic execution using various timing options.")
+@command(
+    "cron",
+    "Schedule a job for automatic execution using various timing options",
+    aliases=("schedule",),
+    args=[
+        ID,
+        NAME,
+        Arg(
+            "-t",
+            "--type",
+            dest="schedule_type",
+            type=ScheduleTypeEnum,
+            choices=list(ScheduleTypeEnum),
+            default=ScheduleTypeEnum.once,
+            help="Schedule type",
+        ),
+        Arg("-d", "--date", dest="run_date", help="Date/time to run (ISO format, e.g. '2024-01-01T10:00:00')"),
+        Arg("--seconds", type=int, default=0, help="Interval in seconds"),
+        Arg("--minutes", type=int, default=0, help="Interval in minutes"),
+        Arg("--hours", type=int, default=0, help="Interval in hours"),
+        Arg("--days", type=int, default=0, help="Interval in days"),
+        Arg("--cron-minute", help="Cron minute field"),
+        Arg("--cron-hour", help="Cron hour field"),
+        Arg("--cron-day", help="Cron day field"),
+        Arg("--cron-month", help="Cron month field"),
+        Arg("--cron-dow", dest="cron_day_of_week", help="Cron day of week field"),
+        Arg("--max-retries", type=int, default=10, help="Maximum retry attempts"),
+        Arg("--retry-interval", type=int, default=60, help="Retry interval in seconds"),
+    ],
+)
 async def schedule_job(
-    job_id: Annotated[
-        int | None,
-        typer.Option("--id", "-i", help="ID of the job to schedule.", show_default=False),
-    ] = None,
-    name: Annotated[
-        str | None,
-        typer.Option("--name", "-n", help="Name of the job to schedule.", show_default=False),
-    ] = None,
-    schedule_type: Annotated[
-        ScheduleTypeEnum,
-        typer.Option("--type", "-t", help="Schedule type: once, interval, cron, or until_done.", show_default=False),
-    ] = ScheduleTypeEnum.once,
-    # For 'once' scheduling
-    run_date: Annotated[
-        str | None,
-        typer.Option(..., "--date", "-d", help="Date/time to run (ISO format, e.g., '2024-01-01T10:00:00')"),
-    ] = None,
-    # For 'interval' scheduling
-    seconds: Annotated[int, typer.Option(..., "--seconds", help="Interval in seconds")] = 0,
-    minutes: Annotated[int, typer.Option(..., "--minutes", help="Interval in minutes")] = 0,
-    hours: Annotated[int, typer.Option(..., "--hours", help="Interval in hours")] = 0,
-    days: Annotated[int, typer.Option(..., "--days", help="Interval in days")] = 0,
-    # For 'cron' scheduling
-    cron_minute: Annotated[str | None, typer.Option(..., "--cron-minute", help="Cron minute field")] = None,
-    cron_hour: Annotated[str | None, typer.Option(..., "--cron-hour", help="Cron hour field")] = None,
-    cron_day: Annotated[str | None, typer.Option(..., "--cron-day", help="Cron day field")] = None,
-    cron_month: Annotated[str | None, typer.Option(..., "--cron-month", help="Cron month field")] = None,
-    cron_day_of_week: Annotated[str | None, typer.Option(..., "--cron-dow", help="Cron day of week field")] = None,
-    # For 'until_done' scheduling
-    max_retries: Annotated[int, typer.Option(..., "--max-retries", help="Maximum retry attempts")] = 10,
-    retry_interval: Annotated[int, typer.Option(..., "--retry-interval", help="Retry interval in seconds")] = 60,
+    job_id=None,
+    name=None,
+    schedule_type=ScheduleTypeEnum.once,
+    run_date=None,
+    seconds=0,
+    minutes=0,
+    hours=0,
+    days=0,
+    cron_minute=None,
+    cron_hour=None,
+    cron_day=None,
+    cron_month=None,
+    cron_day_of_week=None,
+    max_retries=10,
+    retry_interval=60,
 ) -> None:
-    """Schedule a job for execution with various scheduling options."""
     async with SessionLocal() as session:
-        if not job_id and not name:
-            typer.echo("❌ You must provide either --id or --name to specify which job to schedule.")
-            return
-
-        if job_id:
-            job = await session.get(Job, job_id)
-        elif name:
-            job = await session.scalar(select(Job).filter_by(name=name))
-        else:
-            typer.echo(f"❌ Job with ID/Name '{job_id or name}' not found.")
-            return
-
+        job = await find_job(session, job_id, name, "schedule")
         if not job.is_enabled:
-            typer.echo(f"⚠️  Job '{job.name}' is disabled. Enable it first with 'pem update --enabled'.")
-            return
+            raise Fail(f"Job '{job.name}' is disabled.", "Enable it first with 'pem edit --enabled'.")
 
-        # Prepare scheduling kwargs based on schedule type
         kwargs = {}
-
         match schedule_type.value:
             case "once":
-                if not run_date:
-                    typer.echo("❌ For 'once' scheduling, you must provide --date parameter.")
-                    return
+                run_date = ui.need(run_date, "--date", "Date/time to run (ISO, e.g. 2024-01-01T10:00:00)")
                 kwargs["run_date"] = run_date
-
             case "interval":
                 if not any([seconds, minutes, hours, days]):
-                    typer.echo("❌ For 'interval' scheduling, provide at least one time interval:")
-                    typer.echo("   Use --seconds, --minutes, --hours, or --days")
-                    return
+                    raise Fail(
+                        "For 'interval' scheduling, provide at least one interval.",
+                        "Use --seconds, --minutes, --hours or --days.",
+                    )
                 kwargs.update({"seconds": seconds, "minutes": minutes, "hours": hours, "days": days})
-
             case "cron":
                 cron_fields = {
                     "minute": cron_minute,
@@ -427,92 +339,60 @@ async def schedule_job(
                     "month": cron_month,
                     "day_of_week": cron_day_of_week,
                 }
-                # Only include fields that are provided
                 kwargs = {k: v for k, v in cron_fields.items() if v is not None}
                 if not kwargs:
-                    typer.echo("❌ For 'cron' scheduling, provide at least one cron field:")
-                    typer.echo("   Use --cron-minute, --cron-hour, --cron-day, etc.")
-                    return
-
+                    raise Fail(
+                        "For 'cron' scheduling, provide at least one cron field.",
+                        "Use --cron-minute, --cron-hour, --cron-day, ...",
+                    )
             case "until_done":
                 kwargs.update({"max_retries": max_retries, "retry_interval": retry_interval})
 
         try:
             scheduler_job_id = scheduler_manager.schedule_job(job.id, schedule_type.value, **kwargs)
-            typer.echo(f"⏰ Successfully scheduled job '{job.name}'")
-            typer.echo(f"   Scheduler ID: {scheduler_job_id}")
-            typer.echo(f"   Schedule type: {schedule_type.value}")
-
-            if schedule_type == "once":
-                typer.echo(f"   Run date: {run_date}")
-            elif schedule_type.value == "interval":
-                interval_str = []
-                if days:
-                    interval_str.append(f"{days}d")
-                if hours:
-                    interval_str.append(f"{hours}h")
-                if minutes:
-                    interval_str.append(f"{minutes}m")
-                if seconds:
-                    interval_str.append(f"{seconds}s")
-                typer.echo(f"   Interval: {' '.join(interval_str)}")
-            elif schedule_type.value == "cron":
-                typer.echo(f"   Cron schedule: {kwargs}")
-            elif schedule_type.value == "until_done":
-                typer.echo(f"   Max retries: {max_retries}, Retry interval: {retry_interval}s")
-
         except Exception as e:
-            typer.echo(f"❌ Failed to schedule job: {e}")
+            raise Fail(f"Failed to schedule job: {e}") from e
+        ui.success(f"Scheduled job '{job.name}'")
+        ui.table([("Scheduler ID", scheduler_job_id), ("Schedule type", schedule_type.value), ("Details", kwargs)])
 
 
-@app.command(name="crons", help="List all jobs currently scheduled for automatic execution.")
-async def list_scheduled_jobs() -> None:
-    """List all currently scheduled jobs."""
+@command("crons", "List all jobs currently scheduled for automatic execution", aliases=("schedules",))
+def list_scheduled_jobs() -> None:
     jobs = scheduler_manager.list_scheduled_jobs()
-
     if not jobs:
-        typer.echo("📅 No scheduled jobs found.")
-        typer.echo("💡 Use 'pem cron' to schedule jobs for automatic execution.")
+        ui.warning("No scheduled jobs found.")
+        ui.hint("Use 'pem cron' to schedule jobs for automatic execution.")
         return
-
-    typer.echo("📅 Scheduled Jobs:")
-    typer.echo("-" * 80)
-
-    for job in jobs:
-        typer.echo(f"⏰ Schedule ID: {job['id']}")
-        typer.echo(f"   Next Run: {job['next_run']}")
-        typer.echo(f"   Trigger: {job['trigger']}")
-        typer.echo(f"   Function: {job['func']}")
-
-        if "start_time" in job:
-            typer.echo(f"   Start Time: {job['start_time']}")
-        if "max_retries" in job:
-            typer.echo(f"   Max Retries: {job['max_retries']}")
-
-        typer.echo("")
+    ui.table(
+        [(j["id"], j["next_run"], j["trigger"], j["func"]) for j in jobs],
+        ["Schedule ID", "Next run", "Trigger", "Function"],
+    )
 
 
-@app.command(name="cancel", help="Cancel a scheduled job by its scheduler ID.")
-async def cancel_scheduled_job(
-    scheduler_job_id: Annotated[
-        str,
-        typer.Option(
-            "--scheduler-id",
+@command(
+    "cancel",
+    "Cancel a scheduled job by its scheduler ID",
+    args=[
+        Arg(
             "-s",
-            help="The scheduler job ID to cancel (from 'pem crons' output).",
-            show_default=False,
-        ),
+            "--scheduler-id",
+            dest="scheduler_job_id",
+            required=True,
+            prompt="Scheduler ID (see 'pem crons')",
+            help="The scheduler job ID to cancel (from 'pem crons')",
+        )
     ],
-) -> None:
-    """Cancel a scheduled job by its scheduler ID."""
-    if scheduler_manager.cancel_job(scheduler_job_id):
-        typer.echo(f"✅ Successfully canceled scheduled job: {scheduler_job_id}")
-    else:
-        typer.echo(f"❌ Failed to cancel scheduled job: {scheduler_job_id}")
-        typer.echo("💡 Use 'pem crons' to see all scheduled jobs and their IDs.")
+)
+def cancel_scheduled_job(scheduler_job_id) -> None:
+    if not scheduler_manager.cancel_job(scheduler_job_id):
+        raise Fail(
+            f"Failed to cancel scheduled job: {scheduler_job_id}",
+            "Use 'pem crons' to see all scheduled jobs and their IDs.",
+        )
+    ui.success(f"Canceled scheduled job: {scheduler_job_id}")
 
 
-@app.command(name="daemon", help="Run the PEM scheduler daemon.")
+@command("daemon", "Run the PEM scheduler daemon", db=False)
 def run_daemon() -> None:
     """Run the PEM scheduler daemon in the foreground."""
     stop_event = threading.Event()
@@ -523,79 +403,57 @@ def run_daemon() -> None:
     signal.signal(signal.SIGTERM, _handle_stop)
     signal.signal(signal.SIGINT, _handle_stop)
 
-    typer.echo("🧭 PEM daemon running. Press Ctrl+C to stop.")
+    ui.info("PEM daemon running. Press Ctrl+C to stop.")
     while not stop_event.is_set():
         time.sleep(1)
 
     scheduler_manager.shutdown()
-    typer.echo("🛑 PEM daemon stopped")
+    ui.info("PEM daemon stopped")
 
 
-@app.command(name="install", help="Install PEM and set up the background service.")
+@command("install", "Install PEM and set up the background service", db=False, banner=True)
 def install_pem() -> None:
-    """Install PEM, ensure uv, and configure the service."""
-    typer.echo("📦 Ensuring PEM is installed...")
+    ui.info("Ensuring PEM is installed...")
     ensure_pem_installed()
-    typer.echo("🧰 Ensuring uv is installed...")
+    ui.info("Ensuring uv is installed...")
     ensure_uv_installed()
-    typer.echo("🛠 Installing PEM service...")
+    ui.info("Installing PEM service...")
     install_service()
     start_service()
-    typer.echo("✅ PEM installed and service started")
+    ui.success("PEM installed and service started")
 
 
-@app.command(name="update", help="Update PEM and uv.")
-def update_pem() -> None:
-    """Update PEM and uv to the latest version."""
-    typer.echo("⬆️ Updating PEM...")
-    ensure_pem_installed()
-    typer.echo("⬆️ Updating uv...")
+@command("update-uv", "Update the uv tool PEM relies on", db=False)
+def update_uv_cmd() -> None:
     update_uv()
-    typer.echo("✅ Update complete")
+    ui.success("uv updated")
 
 
-@app.command(name="status", help="Display system overview with job counts and scheduling statistics.")
+@command("status", "Display system overview with job counts and scheduling statistics")
 async def show_status() -> None:
-    """Show system status including job counts and scheduled jobs."""
     async with SessionLocal() as session:
-        # Get job statistics
         all_jobs = (await session.execute(select(Job))).scalars().all()
-        total_jobs = len(all_jobs)
-        enabled_jobs = len([job for job in all_jobs if job.is_enabled])
-        disabled_jobs = total_jobs - enabled_jobs
-        script_jobs = len([job for job in all_jobs if job.job_type == "script"])
-        project_jobs = len([job for job in all_jobs if job.job_type == "project"])
-
-    # Get scheduled job count
     scheduled_jobs = scheduler_manager.list_scheduled_jobs()
-    scheduled_count = len(scheduled_jobs)
-
-    typer.echo("📊 PEM System Status")
-    typer.echo("=" * 50)
-    typer.echo(f"📋 Total Jobs: {total_jobs}")
-    typer.echo(f"   🟢 Enabled: {enabled_jobs}")
-    typer.echo(f"   🔴 Disabled: {disabled_jobs}")
-    typer.echo(f"   📄 Scripts: {script_jobs}")
-    typer.echo(f"   📁 Projects: {project_jobs}")
-    typer.echo(f"⏰ Scheduled Jobs: {scheduled_count}")
-    typer.echo("")
-
-    if scheduled_count > 0:
-        typer.echo("🗓️  Active Schedules:")
-        for job in scheduled_jobs:
-            typer.echo(f"   {job['id']} - Next: {job['next_run']}")
+    enabled = sum(1 for j in all_jobs if j.is_enabled)
+    ui.table(
+        [
+            ("Total jobs", len(all_jobs)),
+            ("Enabled", enabled),
+            ("Disabled", len(all_jobs) - enabled),
+            ("Scripts", sum(1 for j in all_jobs if j.job_type == "script")),
+            ("Projects", sum(1 for j in all_jobs if j.job_type == "project")),
+            ("Scheduled", len(scheduled_jobs)),
+        ]
+    )
+    if scheduled_jobs:
+        ui.out()
+        ui.table([(j["id"], j["next_run"]) for j in scheduled_jobs], ["Schedule ID", "Next run"])
     else:
-        typer.echo("💡 No jobs are currently scheduled. Use 'pem cron' to schedule jobs.")
-
-
-# Aliases for common commands
-app.command(name="schedule", help="Alias for pem cron")(schedule_job)
-app.command(name="jobs", help="Alias for pem show")(show_jobs)
-app.command(name="schedules", help="Alias for pem crons")(list_scheduled_jobs)
+        ui.hint("No jobs are currently scheduled. Use 'pem cron' to schedule jobs.")
 
 
 def run() -> None:
-    app()
+    app.main()
 
 
 if __name__ == "__main__":
