@@ -20,8 +20,6 @@ jobs:
       fail-fast: false
       matrix:
         python-version: ["3.12", "3.13", "3.14", "3.15"]
-    # 3.15 is a pre-release; failures there do not block the PR
-    continue-on-error: ${{ matrix.python-version == '3.15' }}
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v7

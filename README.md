@@ -133,8 +133,6 @@ pem -q ...             # quiet: no banner or notes (or PEM_QUIET=1)
 
 **Where is the output of a run?** The log path is printed after `pem run`. Logs are in the directory shown under "Configuration and files".
 
-**Python 3.15.** 3.15 is a pre-release. In testing with 3.15.0b3, importing `sqlalchemy.ext.asyncio` crashes the interpreter (segmentation fault inside `greenlet` 3.5.6), so pem does not start there yet. 3.12, 3.13 and 3.14 work.
-
 ## Development
 
 ```bash
