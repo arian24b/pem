@@ -17,9 +17,11 @@ from cfui.common import YES, JSON, DRY_RUN, add_config, confirm, run_parallel
 
 app = App("tool", repo="https://github.com/me/tool", pypi="tool", description="Does things.")
 
+
 @app.command("greet", "Say hi", args=[Arg("--name", required=True, prompt="Your name"), JSON])
 def greet(a):
     ui.data({"hello": a.name}) if a.json else ui.success(f"hi {a.name}")
+
 
 def main():
     app.main()
