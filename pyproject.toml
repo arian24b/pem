@@ -7,7 +7,7 @@ license = {file = "LICENSE"}
 keywords = ["python", "scheduler", "automation", "devops", "task-runner", "cron", "execution", "management", "scripts", "projects", "cli", "background-jobs", "logging", "dependencies"]
 authors = [{name = "Arian Omrani", email = "arian24b@gmail.com"}]
 maintainers = [{name = "Arian Omrani", email = "arian24b@gmail.com"}]
-requires-python = ">=3.13"
+requires-python = ">=3.12"
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
@@ -15,8 +15,10 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Programming Language :: Python :: 3.14",
+    "Programming Language :: Python :: 3.15",
     "Topic :: Software Development :: Libraries :: Python Modules",
     "Topic :: System :: Systems Administration",
     "Topic :: Utilities",
@@ -32,7 +34,7 @@ dependencies = [
     "psutil>=7.2.2",
     "pydantic>=2.12.5",
     "sqlalchemy>=2.0.46",
-    "typer>=0.23.1",
+    "cfuicli>=1.0.0",
 ]
 
 [project.scripts]

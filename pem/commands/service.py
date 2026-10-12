@@ -1,55 +1,40 @@
 """Service management commands for PEM."""
 
-import typer
+from cfui import ui
 
 from pem.service import install_service, start_service, status_service, stop_service, uninstall_service
 
-service_app = typer.Typer(
-    name="service",
-    help="Manage the PEM background service",
-    no_args_is_help=True,
-)
 
+def register(app) -> None:
+    service = app.group("service", "Manage the PEM background service")
 
-@service_app.command("install")
-def service_install() -> None:
-    """Install and start the PEM service."""
-    install_service()
-    start_service()
-    typer.echo("✅ PEM service installed and started")
+    @service.command("install", "Install and start the PEM service")
+    def service_install(a) -> None:
+        install_service()
+        start_service()
+        ui.success("PEM service installed and started")
 
+    @service.command("uninstall", "Uninstall the PEM service")
+    def service_uninstall(a) -> None:
+        uninstall_service()
+        ui.success("PEM service removed")
 
-@service_app.command("uninstall")
-def service_uninstall() -> None:
-    """Uninstall the PEM service."""
-    uninstall_service()
-    typer.echo("🗑️  PEM service removed")
+    @service.command("start", "Start the PEM service")
+    def service_start(a) -> None:
+        start_service()
+        ui.success("PEM service started")
 
+    @service.command("stop", "Stop the PEM service")
+    def service_stop(a) -> None:
+        stop_service()
+        ui.success("PEM service stopped")
 
-@service_app.command("start")
-def service_start() -> None:
-    """Start the PEM service."""
-    start_service()
-    typer.echo("▶️ PEM service started")
+    @service.command("restart", "Restart the PEM service")
+    def service_restart(a) -> None:
+        stop_service()
+        start_service()
+        ui.success("PEM service restarted")
 
-
-@service_app.command("stop")
-def service_stop() -> None:
-    """Stop the PEM service."""
-    stop_service()
-    typer.echo("⏹️ PEM service stopped")
-
-
-@service_app.command("restart")
-def service_restart() -> None:
-    """Restart the PEM service."""
-    stop_service()
-    start_service()
-    typer.echo("🔄 PEM service restarted")
-
-
-@service_app.command("status")
-def service_status() -> None:
-    """Show PEM service status."""
-    status = status_service()
-    typer.echo(f"📌 PEM service status: {status}")
+    @service.command("status", "Show PEM service status")
+    def service_status(a) -> None:
+        ui.out(f"PEM service status: {status_service()}")
