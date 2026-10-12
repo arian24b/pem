@@ -192,3 +192,6 @@ coverage.xml
 *.log
 
 .ruff_cache
+
+# Local pem databases
+pem.db*

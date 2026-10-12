@@ -1,8 +1,24 @@
 # PEM: Python Execution Manager
 
-[فارسی](README.fa.md)
+[English](README.md) | [فارسی](README.fa.md)
+
+[![PyPI](https://img.shields.io/pypi/v/pemexe)](https://pypi.org/project/pemexe/) [![CI](https://github.com/arian24b/pem/actions/workflows/ci.yml/badge.svg)](https://github.com/arian24b/pem/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
 PEM keeps a list of Python scripts and projects, runs them on demand or on a schedule, and writes a log for every run. Each job runs in its own `uv`-managed environment, so a script can list its own dependencies. State lives in a local SQLite database.
+
+## Features
+
+- Jobs are single scripts or project directories, stored by name in a SQLite database.
+- Each run goes through `uv`, so dependencies (`-w pandas`) and the Python version (`-v 3.13`) are per job.
+- Four schedule types: `once`, `interval`, `cron`, `until_done` (retry until the job succeeds).
+- One log file per run, with size-based rotation.
+- A background service (systemd user unit on Linux, launchd agent on macOS) keeps the scheduler running.
+
+## How it works
+
+`pem add` writes a row to the SQLite database (`pem.db`). `pem run` loads the job and starts a subprocess with output redirected to a new log file. Scripts run as `uv run --no-project [--python V] [--with DEP]... script.py`. A project directory is prepared with `uv sync` (if it has a `pyproject.toml`) or `uv venv` plus `uv pip install -r requirements.txt` (if it has `requirements.txt`), then runs `main.py`, `app.py` or `python -m <dir name>`, in that order. A run fails with exit code `-1` if it exceeds `process_timeout` (1800 s by default); the number of parallel runs is capped by `max_concurrent_processes`.
+
+Schedules are handled by APScheduler with a SQLAlchemy job store in the same database. They only fire while a scheduler process is alive: either the background service (`pem install` / `pem service start`) or `pem daemon` in a terminal.
 
 ## Install
 
@@ -25,6 +41,25 @@ pem run --name data-processor                                     # run now
 pem run --name data-processor --schedule --type interval --minutes 60
 pem show                                                          # all jobs
 pem status                                                        # counts and next runs
+```
+
+Sample session (output from a real run):
+
+```text
+$ pem add --path hello.py --script --name hello
+ℹ Job is enabled. Executing immediately...
+status:    SUCCESS
+exit code: 0
+log file:  ~/.local/state/pem/log/hello_20261012_050534.log
+
+$ pem show
+ID  Name   Type    Status   Path      Dependencies  Python
+1   hello  script  enabled  hello.py
+
+$ pem cron --name hello --type interval --minutes 30
+Scheduler ID   pem_job_interval_1_20261012_050536
+Schedule type  interval
+Details        {'seconds': 0, 'minutes': 30, 'hours': 0, 'days': 0}
 ```
 
 ## Commands
@@ -71,8 +106,8 @@ pem cancel --scheduler-id pem_job_interval_1_20261201_120000
 ## Configuration and files
 
 - Settings: `pem config show`, `pem config set KEY VALUE` (values like `true`, `5`, `a,b`, `none` are converted), `pem config path`. `pem config reset` asks for confirmation; in scripts pass `--yes`.
-- Database: SQLite (`pem.db`). Tables are created on first use.
-- Logs: one file per run, rotated by size (10 MB, 5 backups by default; change them with `pem config set`). macOS: `~/Library/Logs/pem/`. Linux: `~/.local/state/pem/logs/`.
+- Database: SQLite. By default it is `pem.db` in the directory you run `pem` from (see Troubleshooting); set `database_path` to use a fixed location. Tables are created on first use. Settings are stored in `config.json`; `pem config path` prints its location.
+- Logs: one file per run, rotated by size (10 MB, 5 backups by default; change them with `pem config set`). macOS: `~/Library/Logs/pem/`. Linux: `~/.local/state/pem/log/`.
 
 ## Common commands
 
@@ -89,6 +124,14 @@ pem -q ...             # quiet: no banner or notes (or PEM_QUIET=1)
 - Errors appear in a red box on stderr with a non-zero exit code. Ctrl-C exits with 130.
 - Color is used only on a terminal. `NO_COLOR=1` turns it off.
 - `pem update` updates pem itself; `pem update-uv` updates uv.
+
+## Troubleshooting
+
+**`pem show` is empty or my schedules are gone.** The default database path is relative, so every working directory gets its own `pem.db`. Run `pem` from the same directory each time, or set an absolute path once: `pem config set database_path /home/me/.local/share/pem/pem.db` (the directory must exist). The `PEM_DATABASE_URL` environment variable overrides both.
+
+**A schedule never fires.** Schedules run only while the scheduler is alive. Check `pem service status`, or run `pem daemon`.
+
+**Where is the output of a run?** The log path is printed after `pem run`. Logs are in the directory shown under "Configuration and files".
 
 ## Development
 

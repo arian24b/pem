@@ -1,8 +1,24 @@
 # PEM: مدیر اجرای پایتون
 
-[English](README.md)
+[English](README.md) | [فارسی](README.fa.md)
+
+[![PyPI](https://img.shields.io/pypi/v/pemexe)](https://pypi.org/project/pemexe/) [![CI](https://github.com/arian24b/pem/actions/workflows/ci.yml/badge.svg)](https://github.com/arian24b/pem/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
 PEM فهرستی از اسکریپت‌ها و پروژه‌های پایتون را نگه می‌دارد، آن‌ها را بنا به درخواست یا طبق زمان‌بندی اجرا می‌کند و برای هر اجرا لاگ می‌نویسد. هر کار (job) در محیط خودش با `uv` اجرا می‌شود، پس هر اسکریپت می‌تواند وابستگی‌های خودش را اعلام کند. وضعیت در یک پایگاه‌داده SQLite محلی ذخیره می‌شود.
+
+## ویژگی‌ها
+
+- هر کار یک اسکریپت یا یک پوشهٔ پروژه است و با نام در پایگاه‌داده SQLite نگهداری می‌شود.
+- همهٔ اجراها از `uv` می‌گذرند؛ پس وابستگی‌ها (`-w pandas`) و نسخهٔ پایتون (`-v 3.13`) برای هر کار جداگانه تعیین می‌شود.
+- چهار نوع زمان‌بندی: `once`، `interval`، `cron` و `until_done` (تکرار تا موفق شدن کار).
+- برای هر اجرا یک فایل لاگ، با چرخش بر اساس اندازه.
+- یک سرویس پس‌زمینه (واحد کاربری systemd در لینوکس، agent در launchd برای macOS) زمان‌بند را روشن نگه می‌دارد.
+
+## چگونه کار می‌کند
+
+`pem add` یک ردیف در پایگاه‌داده SQLite (`pem.db`) می‌نویسد. `pem run` کار را از پایگاه‌داده می‌خواند و یک زیرفرایند اجرا می‌کند که خروجی‌اش به فایل لاگ تازه‌ای می‌رود. اسکریپت‌ها با `uv run --no-project [--python V] [--with DEP]... script.py` اجرا می‌شوند. پوشهٔ پروژه اگر `pyproject.toml` داشته باشد با `uv sync` آماده می‌شود، و اگر `requirements.txt` داشته باشد با `uv venv` و `uv pip install -r requirements.txt`. بعد به ترتیب `main.py`، `app.py` یا `python -m <نام پوشه>` اجرا می‌شود. اگر اجرا از `process_timeout` (پیش‌فرض ۱۸۰۰ ثانیه) بیشتر طول بکشد متوقف می‌شود و کد خروج `-1` ثبت می‌شود. تعداد اجراهای هم‌زمان را `max_concurrent_processes` محدود می‌کند.
+
+زمان‌بندی‌ها را APScheduler با یک job store مبتنی بر SQLAlchemy در همان پایگاه‌داده مدیریت می‌کند. این زمان‌بندی‌ها فقط وقتی اجرا می‌شوند که یک فرایند زمان‌بند زنده باشد: سرویس پس‌زمینه (`pem install` یا `pem service start`) یا `pem daemon` در یک ترمینال.
 
 ## نصب
 
@@ -25,6 +41,25 @@ pem run --name data-processor                                     # همین ح�
 pem run --name data-processor --schedule --type interval --minutes 60
 pem show                                                          # همهٔ کارها
 pem status                                                        # شمارش‌ها و اجراهای بعدی
+```
+
+نمونهٔ یک اجرای واقعی (خروجی ابزار به انگلیسی است):
+
+```text
+$ pem add --path hello.py --script --name hello
+ℹ Job is enabled. Executing immediately...
+status:    SUCCESS
+exit code: 0
+log file:  ~/.local/state/pem/log/hello_20261012_050534.log
+
+$ pem show
+ID  Name   Type    Status   Path      Dependencies  Python
+1   hello  script  enabled  hello.py
+
+$ pem cron --name hello --type interval --minutes 30
+Scheduler ID   pem_job_interval_1_20261012_050536
+Schedule type  interval
+Details        {'seconds': 0, 'minutes': 30, 'hours': 0, 'days': 0}
 ```
 
 ## دستورها
@@ -71,8 +106,8 @@ pem cancel --scheduler-id pem_job_interval_1_20261201_120000
 ## تنظیمات و فایل‌ها
 
 - تنظیمات: `pem config show` و `pem config set KEY VALUE` (مقدارهایی مثل `true`، `5`، `a,b` و `none` به نوع درست تبدیل می‌شوند) و `pem config path`. `pem config reset` تأیید می‌گیرد؛ در اسکریپت از `--yes` استفاده کنید.
-- پایگاه‌داده: SQLite (`pem.db`). جدول‌ها در اولین استفاده ساخته می‌شوند.
-- لاگ: برای هر اجرا یک فایل، با چرخش بر اساس اندازه (به‌طور پیش‌فرض ۱۰ مگابایت و ۵ نسخهٔ پشتیبان؛ با `pem config set` قابل تغییر است). macOS: `~/Library/Logs/pem/`. لینوکس: `~/.local/state/pem/logs/`.
+- پایگاه‌داده: SQLite. به‌طور پیش‌فرض `pem.db` در پوشه‌ای است که `pem` را از آن اجرا می‌کنید (بخش عیب‌یابی را ببینید)؛ برای مسیر ثابت `database_path` را تنظیم کنید. جدول‌ها در اولین استفاده ساخته می‌شوند. تنظیمات در `config.json` ذخیره می‌شود و `pem config path` مسیرش را نشان می‌دهد.
+- لاگ: برای هر اجرا یک فایل، با چرخش بر اساس اندازه (به‌طور پیش‌فرض ۱۰ مگابایت و ۵ نسخهٔ پشتیبان؛ با `pem config set` قابل تغییر است). macOS: `~/Library/Logs/pem/`. لینوکس: `~/.local/state/pem/log/`.
 
 ## دستورهای مشترک
 
@@ -89,6 +124,14 @@ pem -q ...             # حالت آرام: بدون بنر و یادداشت (�
 - خطاها در یک کادر قرمز روی stderr و با کد خروج غیرصفر نمایش داده می‌شوند. با Ctrl-C کد خروج ۱۳۰ است.
 - رنگ فقط در ترمینال استفاده می‌شود. با `NO_COLOR=1` خاموش می‌شود.
 - `pem update` خود pem را به‌روز می‌کند و `pem update-uv` ابزار uv را.
+
+## عیب‌یابی
+
+**`pem show` خالی است یا زمان‌بندی‌هایم از بین رفته‌اند.** مسیر پیش‌فرض پایگاه‌داده نسبی است، پس هر پوشهٔ کاری `pem.db` خودش را دارد. `pem` را همیشه از یک پوشه اجرا کنید، یا یک بار مسیر مطلق بدهید: `pem config set database_path /home/me/.local/share/pem/pem.db` (پوشه باید وجود داشته باشد). متغیر محیطی `PEM_DATABASE_URL` بر هر دو اولویت دارد.
+
+**زمان‌بندی هیچ‌وقت اجرا نمی‌شود.** زمان‌بندی‌ها فقط وقتی اجرا می‌شوند که زمان‌بند زنده باشد. `pem service status` را ببینید یا `pem daemon` را اجرا کنید.
+
+**خروجی اجرا کجاست؟** مسیر لاگ بعد از `pem run` چاپ می‌شود. پوشهٔ لاگ‌ها در بخش «تنظیمات و فایل‌ها» آمده است.
 
 ## توسعه
 

@@ -50,6 +50,7 @@ Documentation = "https://github.com/arian24b/pem#readme"
 [tool.ruff]
 line-length = 120
 indent-width = 4
+target-version = "py312"
 respect-gitignore = true
 fix = true
 show-fixes = true
@@ -81,6 +82,10 @@ ignore = [
     "T20",    # print statements (CLI tool)
     "A003",   # Class attribute shadows builtin
 ]
+
+[tool.ruff.lint.per-file-ignores]
+"scripts/*" = ["S110", "S602", "S603", "S607"]  # build/release helpers shell out on purpose
+"pem/service.py" = ["S603"]  # runs fixed systemctl/launchctl/uv commands
 
 [tool.uv]
 package = true
